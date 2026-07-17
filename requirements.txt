@@ -1,0 +1,15 @@
+# Core Data Science & Utilities
+numpy
+pandas
+scikit-learn
+requests
+
+# Natural Language Processing (NLP) Libraries
+nltk
+spacy
+transformers
+huggingface_hub
+
+# Jupyter Environment for Practice
+jupyter
+ipykernel

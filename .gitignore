@@ -1,0 +1,21 @@
+# Python Virtual Environment
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Node and build outputs
+node_modules/
+dist/
+build/
+.env
+.env.local

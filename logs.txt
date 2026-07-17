@@ -1,0 +1,6 @@
+[2026-07-16T16:12:11.328Z] requireRole check: userRole=qpsetter, permitted=qpsetter,hod, includes=true
+[2026-07-16T16:12:11.412Z] requireRole check: userRole=qpsetter, permitted=controller,hod,qpsetter, includes=true
+[2026-07-16T16:12:20.880Z] requireRole check: userRole=qpsetter, permitted=qpsetter,hod, includes=true
+[2026-07-16T16:12:20.969Z] requireRole check: userRole=qpsetter, permitted=controller,hod,qpsetter, includes=true
+[2026-07-16T16:12:32.992Z] requireRole check: userRole=qpsetter, permitted=qpsetter,hod, includes=true
+[2026-07-16T16:12:33.095Z] requireRole check: userRole=qpsetter, permitted=controller,hod,qpsetter, includes=true

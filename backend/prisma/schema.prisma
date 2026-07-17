@@ -1,0 +1,290 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum Role {
+  controller
+  hod
+  qpsetter
+}
+
+enum Affiliation {
+  internal
+  external
+}
+
+enum AssignmentStatus {
+  Pending
+  Submitted
+  Approved
+  RevisionRequired
+}
+
+enum SchemeStatus {
+  Draft
+  Finalized
+}
+
+enum NotificationType {
+  info
+  success
+  warning
+  error
+}
+
+enum NotificationKind {
+  suggestion
+  assignment
+  approval
+  revision
+  general
+}
+
+// ─── User ────────────────────────────────────────────────
+
+model User {
+  id            Int          @id @default(autoincrement())
+  username      String       @unique
+  passwordHash  String
+  role          Role
+  name          String
+  title         String?      // Controller title / HOD designation title
+  dept          String?      // Department — used by HOD & faculty
+  email         String?      @unique
+  phone         String?
+  qualification String?
+  experience    String?
+  joinDate      DateTime?
+  designation   String?
+  affiliation   Affiliation?
+  college       String?
+  registeredBy  String?
+  registeredOn  DateTime?
+  hodId         Int?
+  hod           User?        @relation("HodFaculty", fields: [hodId], references: [id])
+  faculty       User[]       @relation("HodFaculty")
+
+  // Assignment relations
+  assignedWork         Assignment[]   @relation("FacultyAssignments")
+  hodAssignments       Assignment[]   @relation("HodAssignments")
+  createdAssignments   Assignment[]   @relation("AssignerAssignments")
+
+  // Other relations
+  notifications        Notification[] @relation("UserNotifications")
+  sentNotifications    Notification[] @relation("NotificationSender")
+  courses              Course[]
+  schemes              Scheme[]
+  suggestions          Suggestion[]   @relation("SuggestionAuthor")
+  refreshTokens        RefreshToken[]
+
+  failedAttempts Int          @default(0)
+  lockoutUntil   DateTime?
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([hodId])
+  @@index([role])
+}
+
+// ─── Course ──────────────────────────────────────────────
+
+model Course {
+  id               Int          @id @default(autoincrement())
+  courseName       String
+  courseCode       String
+  semester         String
+  schemeYear       String
+  credits          Int
+  examTypes        String[]
+  syllabusFileName String?
+  bos              String       // Board of Studies
+  hodId            Int
+  hod              User         @relation(fields: [hodId], references: [id])
+
+  assignments      Assignment[]
+  schemes          Scheme[]
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([courseCode, semester, schemeYear])
+  @@index([hodId])
+}
+
+// ─── Scheme (QP Blueprint) ───────────────────────────────
+
+model Scheme {
+  id          Int          @id @default(autoincrement())
+  courseId    Int
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  examType    String
+  rows        SchemeRow[]
+  status      SchemeStatus @default(Draft)
+  hodId       Int
+  hod         User         @relation(fields: [hodId], references: [id])
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([courseId, examType])
+  @@index([hodId])
+}
+
+// ─── Scheme Row ──────────────────────────────────────────
+
+model SchemeRow {
+  id             Int    @id @default(autoincrement())
+  schemeId       Int
+  scheme         Scheme @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+  questionNo     String
+  part           String
+  maxMarks       Int
+  expectedPoints String
+  co             String
+  bloomsLevel    String
+}
+
+// ─── Assignment ──────────────────────────────────────────
+
+model Assignment {
+  id                Int              @id @default(autoincrement())
+  assessmentCode    String           @unique  // e.g. "1IA_6Sem_May2026_21CS32"
+  description       String?
+  assessmentId      Int?
+  assessment        Assessment?      @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  facultyId         Int?
+  faculty           User?            @relation("FacultyAssignments", fields: [facultyId], references: [id], onDelete: Restrict)
+
+  hodId             Int?
+  hod               User?            @relation("HodAssignments", fields: [hodId], references: [id], onDelete: SetNull)
+
+  courseId           Int
+  course            Course           @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  examType          String
+  startDate         DateTime?
+  dueDate           DateTime
+  status            AssignmentStatus @default(Pending)
+  assignedDate      DateTime
+  instructions      String?
+  revisionComment   String?
+
+  syllabusFileName  String?
+  prevPaperFileName String?
+  timetableFileName String?
+
+  assignedById      Int?
+  assignedBy        User?            @relation("AssignerAssignments", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  suggestions       Suggestion[]
+  paper             QuestionPaper?
+
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([facultyId])
+  @@index([hodId])
+  @@index([courseId])
+  @@index([status])
+  @@index([assignedById])
+}
+
+// ─── Suggestion ──────────────────────────────────────────
+
+model Suggestion {
+  id           Int        @id @default(autoincrement())
+  assignmentId Int
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  fromUserId   Int
+  fromUser     User       @relation("SuggestionAuthor", fields: [fromUserId], references: [id])
+  message      String
+  date         DateTime   @default(now())
+
+  @@index([assignmentId])
+}
+
+// ─── Question Paper ──────────────────────────────────────
+
+model QuestionPaper {
+  id           Int        @id @default(autoincrement())
+  assignmentId Int        @unique
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  content      Json
+  submittedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+// ─── Notification ────────────────────────────────────────
+
+model Notification {
+  id           Int              @id @default(autoincrement())
+  userId       Int
+  user         User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  message      String
+  date         DateTime         @default(now())
+  read         Boolean          @default(false)
+  type         NotificationType @default(info)
+  kind         NotificationKind @default(general)
+  assignmentId Int?
+  fromUserId   Int?
+  fromUser     User?            @relation("NotificationSender", fields: [fromUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, read])
+}
+
+// ─── Refresh Token ───────────────────────────────────────
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  familyId   String
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String
+  revoked    Boolean   @default(false)
+  expiresAt  DateTime
+  replacedBy String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+// ─── Audit Log ───────────────────────────────────────────
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  role      Role?
+  action    String
+  entityId  String?
+  details   String?
+  ipAddress String?
+  timestamp DateTime @default(now())
+
+  @@index([userId])
+  @@index([timestamp])
+}
+
+// ─── Assessment Master ───────────────────────────────────
+
+model Assessment {
+  id             Int          @id @default(autoincrement())
+  assessmentCode String       @unique
+  examType       String
+  semester       String
+  startDate      DateTime
+  schemeYear     String?
+  assignments    Assignment[]
+  createdAt      DateTime     @default(now())
+}

@@ -1,0 +1,51 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: qpset
+          POSTGRES_PASSWORD: qpset
+          POSTGRES_DB: qpset
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qpset -d qpset"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://qpset:qpset@localhost:5432/qpset?schema=public
+      JWT_ACCESS_SECRET: test-access-secret-minimum-32-characters
+      JWT_REFRESH_SECRET: test-refresh-secret-minimum-32-characters
+      FRONTEND_ORIGIN: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm install
+      - run: npm run prisma:generate
+      - run: npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script
+      - run: npm run build
+      - run: npm test
+      - run: docker build -t amcec-qpset-backend:${{ github.sha }} .
