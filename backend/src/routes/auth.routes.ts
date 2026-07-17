@@ -40,7 +40,7 @@ function refreshToken(user: { id: number; role: Role; username: string }) {
 const cookieOptions = {
   httpOnly: true,
   secure: env.NODE_ENV === "production",
-  sameSite: "strict" as const,
+  sameSite: env.NODE_ENV === "production" ? ("none" as const) : ("lax" as const),
   path: "/"
 };
 
