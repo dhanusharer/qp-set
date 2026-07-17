@@ -142,17 +142,27 @@ authRouter.post("/login", authRateLimit, validateBody(loginSchema), async (req, 
   res.json({
     success: true,
     data: {
-      user: publicUser(user)
+      user: publicUser(user),
+      csrfToken
     }
   });
 });
 
 authRouter.get("/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.sub } });
+  const csrfToken = req.cookies["csrf-token"] || crypto.randomUUID();
+  
+  res.cookie("csrf-token", csrfToken, {
+    ...cookieOptions,
+    httpOnly: false,
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  });
+
   res.json({
     success: true,
     data: {
-      user: publicUser(user)
+      user: publicUser(user),
+      csrfToken
     }
   });
 });

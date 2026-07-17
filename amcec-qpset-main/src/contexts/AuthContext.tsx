@@ -21,6 +21,7 @@ export const useAuth = () => {
 
 interface MeResponse {
   user: Omit<User, 'password'>;
+  csrfToken?: string;
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -34,6 +35,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleLogoutEvent = () => {
       setCurrentUser(null);
       setAuthError(null);
+      // Clear local CSRF cookie on logout
+      document.cookie = "csrf-token=; path=/; max-age=0";
     };
     window.addEventListener('auth-logout', handleLogoutEvent);
     return () => window.removeEventListener('auth-logout', handleLogoutEvent);
@@ -43,6 +46,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     apiClient.get<{ success: boolean; data: MeResponse }>('/auth/me')
       .then(res => {
+        if (res.data.csrfToken) {
+          document.cookie = `csrf-token=${res.data.csrfToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        }
         setCurrentUser({ ...res.data.user, password: '' } as User);
       })
       .catch(err => {
@@ -58,13 +64,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthLoading(true);
     setAuthError(null);
     try {
-      const res = await apiClient.post<{ success: boolean; data: { user: Omit<User, 'password'> } }>('/auth/login', {
+      const res = await apiClient.post<{ success: boolean; data: { user: Omit<User, 'password'>; csrfToken?: string } }>('/auth/login', {
         username,
         password,
         role
       });
       
       if (res && res.data && res.data.user) {
+        if (res.data.csrfToken) {
+          document.cookie = `csrf-token=${res.data.csrfToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        }
         setCurrentUser({ ...res.data.user, password: '' } as User);
         return true;
       }
