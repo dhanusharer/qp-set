@@ -2,9 +2,6 @@
 
 <div align="center">
 
-<!-- Project Logo / Hero Banner -->
-<img src="https://raw.githubusercontent.com/dhanusharer/qp-set/main/amcec-qpset-main/public/favicon.ico" alt="AMCEC QPSet Logo" width="110" height="110" onerror="this.style.display='none'"/>
-
 ### Secure, Role-Governed Question Paper Authoring, Review, and Workflow Management for Academic Institutions
 
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20.0.0-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
