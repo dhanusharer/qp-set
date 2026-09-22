@@ -22,22 +22,22 @@ const listSchema = z.object({
 
 const createUserSchema = z.object({
   username: z.string().min(3),
-  password: z.string().min(8),
+  password: z.string().min(6),
   role: z.nativeEnum(Role),
   name: z.string().min(1),
-  title: z.string().optional(),
-  dept: z.string().optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  qualification: z.string().optional(),
-  experience: z.string().optional(),
-  joinDate: z.coerce.date().optional(),
-  designation: z.string().optional(),
-  hodId: z.number().int().optional(),
-  affiliation: z.nativeEnum(Affiliation).optional(),
-  college: z.string().optional(),
-  registeredBy: z.string().optional(),
-  registeredOn: z.coerce.date().optional()
+  title: z.string().optional().nullable(),
+  dept: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable().or(z.literal("")).transform(v => v || undefined),
+  phone: z.string().optional().nullable().or(z.literal("")).transform(v => v || undefined),
+  qualification: z.string().optional().nullable().transform(v => v || undefined),
+  experience: z.string().optional().nullable().transform(v => v || undefined),
+  joinDate: z.coerce.date().optional().nullable(),
+  designation: z.string().optional().nullable().transform(v => v || undefined),
+  hodId: z.coerce.number().int().optional().nullable().transform(v => v || undefined),
+  affiliation: z.nativeEnum(Affiliation).optional().nullable(),
+  college: z.string().optional().nullable().transform(v => v || undefined),
+  registeredBy: z.string().optional().nullable().transform(v => v || undefined),
+  registeredOn: z.coerce.date().optional().nullable()
 });
 
 usersRouter.use(requireAuth);
@@ -106,11 +106,71 @@ usersRouter.post("/", requireRole(Role.controller, Role.hod), validateBody(creat
     // Force department and HOD coordinator mappings to HOD's own values
     data.dept = actor.dept;
     data.hodId = actor.id;
+  } else if (data.hodId) {
+    // If controller passed a hodId, ensure it actually exists
+    const hodExists = await prisma.user.findUnique({ where: { id: data.hodId } });
+    if (!hodExists || hodExists.role !== Role.hod) {
+      // Try to find an HOD by department if available
+      if (data.dept) {
+        const deptHod = await prisma.user.findFirst({
+          where: {
+            role: Role.hod,
+            OR: [
+              { dept: data.dept },
+              { dept: { contains: data.dept, mode: "insensitive" } }
+            ]
+          }
+        });
+        data.hodId = deptHod ? deptHod.id : null;
+      } else {
+        data.hodId = null;
+      }
+    }
+  } else if (data.dept) {
+    // Auto-link to HOD of the department if found
+    const deptHod = await prisma.user.findFirst({
+      where: {
+        role: Role.hod,
+        OR: [
+          { dept: data.dept },
+          { dept: { contains: data.dept, mode: "insensitive" } }
+        ]
+      }
+    });
+    if (deptHod) {
+      data.hodId = deptHod.id;
+    }
   }
+
+  // Ensure username uniqueness (auto-resolve conflict with suffix if needed)
+  let candidateUsername = data.username.toLowerCase().trim();
+  let existingUser = await prisma.user.findUnique({ where: { username: candidateUsername } });
+  let counter = 1;
+  while (existingUser) {
+    candidateUsername = `${data.username.toLowerCase().trim()}${counter}`;
+    existingUser = await prisma.user.findUnique({ where: { username: candidateUsername } });
+    counter++;
+  }
+  data.username = candidateUsername;
+
+  // Check email uniqueness if email provided
+  if (data.email) {
+    const existingEmail = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existingEmail) {
+      return res.status(409).json({ success: false, error: { message: `Email ${data.email} is already registered.` } });
+    }
+  }
+
+  // Clean empty/undefined values
+  Object.keys(data).forEach(key => {
+    if (data[key] === "" || data[key] === undefined) {
+      delete data[key];
+    }
+  });
 
   const user = await prisma.user.create({
     data: { ...data, passwordHash: await bcrypt.hash(password, env.BCRYPT_ROUNDS) },
-    select: { id: true, username: true, role: true, name: true, email: true, hodId: true }
+    select: { id: true, username: true, role: true, name: true, email: true, hodId: true, dept: true, designation: true }
   });
 
   recordAuditLog({
@@ -126,17 +186,17 @@ usersRouter.post("/", requireRole(Role.controller, Role.hod), validateBody(creat
 
 const updateUserSchema = z.object({
   username: z.string().min(3).optional(),
-  password: z.string().min(8).optional(),
+  password: z.string().min(6).optional(),
   name: z.string().min(1).optional(),
-  title: z.string().optional(),
-  dept: z.string().optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  qualification: z.string().optional(),
-  experience: z.string().optional(),
-  designation: z.string().optional(),
-  affiliation: z.nativeEnum(Affiliation).optional(),
-  college: z.string().optional()
+  title: z.string().optional().nullable(),
+  dept: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable().or(z.literal("")).transform(v => v || undefined),
+  phone: z.string().optional().nullable().or(z.literal("")).transform(v => v || undefined),
+  qualification: z.string().optional().nullable().transform(v => v || undefined),
+  experience: z.string().optional().nullable().transform(v => v || undefined),
+  designation: z.string().optional().nullable().transform(v => v || undefined),
+  affiliation: z.nativeEnum(Affiliation).optional().nullable(),
+  college: z.string().optional().nullable().transform(v => v || undefined)
 });
 
 const userParamsSchema = z.object({

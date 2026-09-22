@@ -51,7 +51,12 @@ export function createApp() {
     cors({
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        if (origin === env.FRONTEND_ORIGIN || origin.endsWith(".vercel.app")) {
+        if (
+          origin === env.FRONTEND_ORIGIN ||
+          origin.endsWith(".vercel.app") ||
+          origin.startsWith("http://localhost:") ||
+          origin.startsWith("http://127.0.0.1:")
+        ) {
           return callback(null, true);
         }
         callback(null, false);

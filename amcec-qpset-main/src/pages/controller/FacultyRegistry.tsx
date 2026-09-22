@@ -68,22 +68,27 @@ export default function FacultyRegistry() {
   };
 
   const handleRegister = async () => {
-    if (!name) return;
+    if (!name.trim()) return;
     const username = genUsername(name, regAffiliation);
     const password = genPassword();
     try {
-      const matchedHod = allUsers.find(u => u.role === 'hod' && u.dept === regDept);
-      const hodId = matchedHod ? matchedHod.id : 8;
+      const matchedHod = allUsers.find(u => u.role === 'hod' && (u.dept === regDept || (u.dept && regDept && (u.dept.includes(regDept) || regDept.includes(u.dept)))));
+      const hodId = matchedHod ? matchedHod.id : undefined;
 
       const u = await addUser({
-        username, password, role: 'qpsetter',
-        name, email, phone, qualification,
+        username,
+        password,
+        role: 'qpsetter',
+        name: name.trim(),
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        qualification: qualification.trim() || undefined,
         affiliation: regAffiliation,
-        college: regAffiliation === 'external' ? (college || 'External College') : 'AMC Engineering College',
+        college: regAffiliation === 'external' ? (college.trim() || 'External College') : 'AMC Engineering College',
         hodId,
-        registeredBy: 'Dr. Nandishwar',
+        registeredBy: currentUser?.name || 'Dr. Nandishwar',
         registeredOn: new Date().toISOString().split('T')[0],
-        designation: regAffiliation === 'external' ? 'Visiting Paper Setter' : 'Assistant Professor',
+        designation: regAffiliation === 'external' ? 'Visiting Paper Setter' : (qualification.trim() || 'Assistant Professor'),
         dept: regDept
       });
       setCredentials({ username: u.username, password: u.password || password, name: u.name });
@@ -153,7 +158,7 @@ export default function FacultyRegistry() {
         assessmentId: selectedAssessmentId,
         description: aDescription,
         facultyId: f.id,
-        hodId: f.hodId || 8,
+        hodId: f.hodId || undefined,
         courseId: courseObj.id,
         examType: aExamType,
         startDate: aStartDate || undefined,
