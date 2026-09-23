@@ -20,10 +20,12 @@ import {
   AlertCircle,
   FileText,
   Eye,
-  RefreshCw
+  RefreshCw,
+  Activity
 } from 'lucide-react';
 import { MathView } from '@/components/MathView';
 import { QuestionAuthoringModal } from '@/components/QuestionAuthoringModal';
+import { QuestionPsychometricsModal } from '@/components/QuestionPsychometricsModal';
 import apiClient from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -36,6 +38,8 @@ export default function QuestionBankPage() {
   const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isAuthorModalOpen, setIsAuthorModalOpen] = useState<boolean>(false);
+  const [selectedPsychQuestionId, setSelectedPsychQuestionId] = useState<number | null>(null);
+  const [isPsychModalOpen, setIsPsychModalOpen] = useState<boolean>(false);
 
   // Filters
   const [selectedUnit, setSelectedUnit] = useState<string>('all');
@@ -416,6 +420,19 @@ export default function QuestionBankPage() {
                       <span>Authored by: <strong>{q.author?.name || 'Faculty'}</strong> ({q.author?.dept || 'Dept'})</span>
 
                       <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1 border-indigo-200 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                          onClick={() => {
+                            setSelectedPsychQuestionId(q.id);
+                            setIsPsychModalOpen(true);
+                          }}
+                        >
+                          <Activity className="w-3.5 h-3.5" />
+                          Psychometrics & Health
+                        </Button>
+
                         {q.status === 'DRAFT' && (
                           <Button
                             size="sm"
@@ -451,6 +468,13 @@ export default function QuestionBankPage() {
         onOpenChange={setIsAuthorModalOpen}
         courses={courses}
         onQuestionCreated={loadBankData}
+      />
+
+      {/* Psychometrics & Question Health Modal */}
+      <QuestionPsychometricsModal
+        questionId={selectedPsychQuestionId}
+        open={isPsychModalOpen}
+        onOpenChange={setIsPsychModalOpen}
       />
     </div>
   );

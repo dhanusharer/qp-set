@@ -65,6 +65,27 @@ enum QuestionStatus {
   RETIRED
 }
 
+enum QuestionHealthStatus {
+  HEALTHY
+  REVIEW_REQUIRED
+  HIGH_EXPOSURE
+  LOW_DISCRIMINATION
+  POSSIBLE_DUPLICATE
+  INSUFFICIENT_DATA
+}
+
+enum SimilarityType {
+  EXACT
+  LEXICAL
+  SEMANTIC
+}
+
+enum SimilarityResolution {
+  PENDING_REVIEW
+  DISMISSED_DISTINCT
+  CONFIRMED_DUPLICATE
+}
+
 // ─── User ────────────────────────────────────────────────
 
 model User {
@@ -389,11 +410,15 @@ model Question {
   status           QuestionStatus   @default(DRAFT)
   authorId         Int
   author           User             @relation("QuestionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
-  currentVersionNo Int              @default(1)
+  currentVersionNo Int                   @default(1)
   versions         QuestionVersion[]
   reviews          QuestionReview[]
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  psychometric     QuestionPsychometric?
+  usages           QuestionUsage[]
+  similaritiesAsSource QuestionSimilarity[] @relation("SourceQuestionSimilarities")
+  similaritiesAsTarget QuestionSimilarity[] @relation("TargetQuestionSimilarities")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 
   @@index([courseId, unitNumber])
   @@index([authorId])
@@ -523,6 +548,7 @@ model PaperForm {
   status           String              @default("GENERATED") // "GENERATED", "UNDER_SCRUTINY", "APPROVED", "SEALED"
   snapshots        PaperItemSnapshot[]
   reviews          PaperScrutinyReview[]
+  questionUsages   QuestionUsage[]
   equivalenceScore Float?              // e.g. 98.5% equivalence
   bloomVariance    Float?              // e.g. 2.1%
   coVariance       Float?              // e.g. 1.8%
@@ -572,6 +598,83 @@ model PaperScrutinyReview {
 
   @@index([paperFormId])
   @@index([reviewerId])
+}
+
+// ─── Question Usage Tracking ──────────────────────────────
+
+model QuestionUsage {
+  id             Int         @id @default(autoincrement())
+  questionId     Int
+  question       Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  paperFormId    Int?
+  paperForm      PaperForm?  @relation(fields: [paperFormId], references: [id], onDelete: SetNull)
+  academicYear   String      // e.g. "2025-2026"
+  semester       String      // e.g. "6"
+  assessmentType String      // e.g. "SEE", "1IA", "2IA"
+  usedAt         DateTime    @default(now())
+
+  @@index([questionId])
+  @@index([academicYear, semester])
+  @@index([paperFormId])
+}
+
+// ─── Question Psychometric Intelligence ───────────────────
+
+model QuestionPsychometric {
+  id                  Int                  @id @default(autoincrement())
+  questionId          Int                  @unique
+  question            Question             @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  difficultyIndex     Float                @default(0.50) // Facility value P = (H + L) / (2 * N)
+  discriminationIndex Float                @default(0.30) // Item Discrimination D = (H - L) / N
+  pointBiserial       Float?               // Point-biserial correlation with total exam score
+  sampleSize          Int                  @default(0)    // Total student responses analyzed
+  averageScore        Float                @default(0.0)  // Average marks secured on this question
+  healthStatus        QuestionHealthStatus @default(INSUFFICIENT_DATA)
+  healthExplanation   String?              // Explainable justification for current health status
+  timesUsed           Int                  @default(0)
+  lastUsedAt          DateTime?
+  lastCalculatedAt    DateTime             @default(now())
+
+  @@index([healthStatus])
+  @@index([difficultyIndex])
+}
+
+// ─── Question Similarity & Duplicate Risk ─────────────────
+
+model QuestionSimilarity {
+  id                 Int                  @id @default(autoincrement())
+  sourceQuestionId   Int
+  sourceQuestion     Question             @relation("SourceQuestionSimilarities", fields: [sourceQuestionId], references: [id], onDelete: Cascade)
+  targetQuestionId   Int
+  targetQuestion     Question             @relation("TargetQuestionSimilarities", fields: [targetQuestionId], references: [id], onDelete: Cascade)
+  similarityScore    Float                // 0.00 to 1.00
+  similarityType     SimilarityType       @default(LEXICAL)
+  resolution         SimilarityResolution @default(PENDING_REVIEW)
+  resolutionNote     String?
+  flaggedAt          DateTime             @default(now())
+  resolvedAt         DateTime?
+
+  @@unique([sourceQuestionId, targetQuestionId])
+  @@index([sourceQuestionId])
+  @@index([targetQuestionId])
+  @@index([resolution])
+}
+
+// ─── Question Exposure Policy ─────────────────────────────
+
+model QuestionExposurePolicy {
+  id                    Int      @id @default(autoincrement())
+  code                  String   @unique // e.g. "DEFAULT_VTU_EXPOSURE"
+  name                  String
+  maxUsesLastNExams     Int      @default(2) // Max times a question may be used in last N exam sessions
+  examWindowN           Int      @default(4) // Window of N exams
+  minExamsBetweenReuse  Int      @default(2) // Cooldown period: minimum exam sessions before reuse
+  maxFormOverlapPercent Float    @default(15.0) // Max percentage overlap across parallel forms in same session
+  preferNeverUsed       Boolean  @default(true)
+  excludeRetired        Boolean  @default(true)
+  isDefault             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 
