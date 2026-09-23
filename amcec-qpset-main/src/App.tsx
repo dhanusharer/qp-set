@@ -36,6 +36,10 @@ import BoeScrutinyPage from "@/pages/scrutiny/BoeScrutinyPage";
 import SchemeOfEvaluationPage from "@/pages/scrutiny/SchemeOfEvaluationPage";
 import StrongRoomVaultPage from "@/pages/vault/StrongRoomVaultPage";
 import ObeAttainmentPage from "@/pages/attainment/ObeAttainmentPage";
+import { AcademicCycleProvider } from "@/contexts/AcademicCycleContext";
+import { ExamSessionsPage } from "@/pages/academic-cycle/ExamSessionsPage";
+import { AssessmentEventPage } from "@/pages/academic-cycle/AssessmentEventPage";
+import { HistoricalExplorerPage } from "@/pages/academic-cycle/HistoricalExplorerPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -79,6 +83,9 @@ function AppRoutes() {
       <Route path="/controller/scheme-evaluation/:formId" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><SchemeOfEvaluationPage /></ControllerLayout></ProtectedRoute>} />
       <Route path="/controller/vault" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><StrongRoomVaultPage /></ControllerLayout></ProtectedRoute>} />
       <Route path="/controller/attainment" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><ObeAttainmentPage /></ControllerLayout></ProtectedRoute>} />
+      <Route path="/controller/exam-sessions" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><ExamSessionsPage /></ControllerLayout></ProtectedRoute>} />
+      <Route path="/controller/assessment-events/:eventId" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><AssessmentEventPage /></ControllerLayout></ProtectedRoute>} />
+      <Route path="/controller/historical-explorer" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><HistoricalExplorerPage /></ControllerLayout></ProtectedRoute>} />
 
       {/* HOD routes */}
       <Route path="/hod/dashboard" element={<ProtectedRoute requiredRole="hod"><HodLayout><HodDashboard /></HodLayout></ProtectedRoute>} />
@@ -114,9 +121,11 @@ const App = () => (
       <Toaster />
       <AuthProvider>
         <AppProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          <AcademicCycleProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </AcademicCycleProvider>
         </AppProvider>
       </AuthProvider>
     </TooltipProvider>

@@ -1,16 +1,17 @@
 import { prisma } from "../db.js";
-import { AppError } from "../middleware/error.js";
+import { ApiError } from "../middleware/error.js";
 
 export interface CreateAcademicYearInput {
   code: string;
-  name: string;
+  name?: string;
   startDate: string | Date;
   endDate: string | Date;
   isCurrent?: boolean;
 }
 
 export interface CreateExamSessionInput {
-  academicTermId: number;
+  academicYearId?: number;
+  academicTermId?: number;
   assessmentTypeId: number;
   regulationProfileId?: number;
   code: string;
@@ -40,7 +41,7 @@ export class AcademicCycleService {
    * List all Academic Years with their terms and session counts
    */
   static async listAcademicYears() {
-    return prisma.academicYear.findMany({
+    const rawYears = await prisma.academicYear.findMany({
       include: {
         terms: {
           include: {
@@ -53,6 +54,17 @@ export class AcademicCycleService {
       },
       orderBy: { startDate: "desc" },
     });
+
+    return rawYears.map((y) => ({
+      ...y,
+      code: y.yearCode,
+      name: `Academic Year ${y.yearCode}`,
+      terms: y.terms.map((t) => ({
+        ...t,
+        code: t.termCode,
+        name: t.displayName,
+      })),
+    }));
   }
 
   /**
@@ -66,22 +78,27 @@ export class AcademicCycleService {
       });
     }
 
-    return prisma.academicYear.create({
+    const created = await prisma.academicYear.create({
       data: {
-        code: input.code,
-        name: input.name,
+        yearCode: input.code,
         startDate: new Date(input.startDate),
         endDate: new Date(input.endDate),
         isCurrent: input.isCurrent ?? false,
       },
     });
+
+    return {
+      ...created,
+      code: created.yearCode,
+      name: `Academic Year ${created.yearCode}`,
+    };
   }
 
   /**
    * List Academic Terms with associated academic year and sessions
    */
   static async listAcademicTerms(academicYearId?: number) {
-    return prisma.academicTerm.findMany({
+    const rawTerms = await prisma.academicTerm.findMany({
       where: academicYearId ? { academicYearId } : undefined,
       include: {
         academicYear: true,
@@ -91,15 +108,31 @@ export class AcademicCycleService {
       },
       orderBy: [{ academicYear: { startDate: "desc" } }, { termType: "asc" }],
     });
+
+    return rawTerms.map((t) => ({
+      ...t,
+      code: t.termCode,
+      name: t.displayName,
+      academicYear: {
+        ...t.academicYear,
+        code: t.academicYear.yearCode,
+        name: `Academic Year ${t.academicYear.yearCode}`,
+      },
+    }));
   }
 
   /**
    * List all Assessment Types (CIE_1, SEE, MAKEUP, etc.)
    */
   static async listAssessmentTypes() {
-    return prisma.assessmentType.findMany({
-      orderBy: [{ category: "asc" }, { name: "asc" }],
+    const types = await prisma.assessmentType.findMany({
+      orderBy: [{ category: "asc" }, { code: "asc" }],
     });
+
+    return types.map((t) => ({
+      ...t,
+      name: t.displayName,
+    }));
   }
 
   /**
@@ -108,9 +141,6 @@ export class AcademicCycleService {
   static async listCurriculumVersions() {
     return prisma.curriculumVersion.findMany({
       include: {
-        program: {
-          include: { department: true },
-        },
         _count: {
           select: { curriculumCourses: true },
         },
@@ -127,13 +157,14 @@ export class AcademicCycleService {
     status?: string;
     assessmentTypeId?: number;
   }) {
-    return prisma.examSession.findMany({
+    const rawSessions = await prisma.examSession.findMany({
       where: {
         ...(filters?.academicTermId && { academicTermId: filters.academicTermId }),
         ...(filters?.status && { status: filters.status }),
         ...(filters?.assessmentTypeId && { assessmentTypeId: filters.assessmentTypeId }),
       },
       include: {
+        academicYear: true,
         academicTerm: {
           include: { academicYear: true },
         },
@@ -143,30 +174,80 @@ export class AcademicCycleService {
           select: { assessmentEvents: true },
         },
       },
-      orderBy: { startDate: "desc" },
+      orderBy: { startsAt: "desc" },
     });
+
+    return rawSessions.map((s) => ({
+      ...s,
+      code: s.sessionCode,
+      startDate: s.startsAt,
+      endDate: s.endsAt,
+      academicTerm: s.academicTerm
+        ? {
+            ...s.academicTerm,
+            code: s.academicTerm.termCode,
+            name: s.academicTerm.displayName,
+            academicYear: {
+              ...s.academicTerm.academicYear,
+              code: s.academicTerm.academicYear.yearCode,
+              name: `Academic Year ${s.academicTerm.academicYear.yearCode}`,
+            },
+          }
+        : undefined,
+      assessmentType: {
+        ...s.assessmentType,
+        name: s.assessmentType.displayName,
+      },
+    }));
   }
 
   /**
    * Create an Exam Session
    */
   static async createExamSession(input: CreateExamSessionInput) {
-    return prisma.examSession.create({
+    let yearId = input.academicYearId;
+    if (!yearId && input.academicTermId) {
+      const term = await prisma.academicTerm.findUnique({
+        where: { id: input.academicTermId },
+      });
+      if (term) yearId = term.academicYearId;
+    }
+
+    if (!yearId) {
+      const currentYear = await prisma.academicYear.findFirst({
+        where: { isCurrent: true },
+      });
+      if (!currentYear) {
+        throw new ApiError(400, "Academic year could not be determined");
+      }
+      yearId = currentYear.id;
+    }
+
+    const created = await prisma.examSession.create({
       data: {
+        academicYearId: yearId,
         academicTermId: input.academicTermId,
         assessmentTypeId: input.assessmentTypeId,
         regulationProfileId: input.regulationProfileId,
-        code: input.code,
+        sessionCode: input.code,
         name: input.name,
-        startDate: new Date(input.startDate),
-        endDate: new Date(input.endDate),
+        startsAt: new Date(input.startDate),
+        endsAt: new Date(input.endDate),
         status: "PLANNING",
       },
       include: {
+        academicYear: true,
         academicTerm: { include: { academicYear: true } },
         assessmentType: true,
       },
     });
+
+    return {
+      ...created,
+      code: created.sessionCode,
+      startDate: created.startsAt,
+      endDate: created.endsAt,
+    };
   }
 
   /**
@@ -187,18 +268,18 @@ export class AcademicCycleService {
     });
 
     if (!session) {
-      throw new AppError("Exam session not found", 404);
+      throw new ApiError(404, "Exam session not found");
     }
 
     const allowed = validTransitions[session.status] || [];
     if (!allowed.includes(status)) {
-      throw new AppError(
-        `Invalid status transition from '${session.status}' to '${status}'. Allowed: ${allowed.join(", ") || "none"}`,
-        400
+      throw new ApiError(
+        400,
+        `Invalid status transition from '${session.status}' to '${status}'. Allowed: ${allowed.join(", ") || "none"}`
       );
     }
 
-    return prisma.examSession.update({
+    const updated = await prisma.examSession.update({
       where: { id: sessionId },
       data: { status },
       include: {
@@ -206,6 +287,13 @@ export class AcademicCycleService {
         assessmentType: true,
       },
     });
+
+    return {
+      ...updated,
+      code: updated.sessionCode,
+      startDate: updated.startsAt,
+      endDate: updated.endsAt,
+    };
   }
 
   /**
@@ -215,6 +303,7 @@ export class AcademicCycleService {
     const session = await prisma.examSession.findUnique({
       where: { id: sessionId },
       include: {
+        academicYear: true,
         academicTerm: {
           include: { academicYear: true },
         },
@@ -235,20 +324,59 @@ export class AcademicCycleService {
               },
             },
             blueprints: true,
+            candidates: true,
             _count: {
-              select: { registrations: true, questionUsages: true },
+              select: { candidates: true, questionUsages: true },
             },
           },
-          orderBy: [{ scheduledDate: "asc" }, { course: { code: "asc" } }],
+          orderBy: [{ scheduledAt: "asc" }, { course: { courseCode: "asc" } }],
         },
       },
     });
 
     if (!session) {
-      throw new AppError("Exam session not found", 404);
+      throw new ApiError(404, "Exam session not found");
     }
 
-    return session;
+    return {
+      ...session,
+      code: session.sessionCode,
+      startDate: session.startsAt,
+      endDate: session.endsAt,
+      academicTerm: session.academicTerm
+        ? {
+            ...session.academicTerm,
+            code: session.academicTerm.termCode,
+            name: session.academicTerm.displayName,
+            academicYear: {
+              ...session.academicTerm.academicYear,
+              code: session.academicTerm.academicYear.yearCode,
+              name: `Academic Year ${session.academicTerm.academicYear.yearCode}`,
+            },
+          }
+        : undefined,
+      assessmentType: {
+        ...session.assessmentType,
+        name: session.assessmentType.displayName,
+      },
+      assessmentEvents: session.assessmentEvents.map((e) => ({
+        ...e,
+        scheduledDate: e.scheduledAt,
+        course: {
+          ...e.course,
+          code: e.course.courseCode,
+          name: e.course.courseName,
+        },
+        paperForms: e.paperForms.map((pf) => ({
+          ...pf,
+          formCode: pf.setName,
+        })),
+        _count: {
+          registrations: e.candidates.length,
+          questionUsages: e._count.questionUsages,
+        },
+      })),
+    };
   }
 
   /**
@@ -261,7 +389,7 @@ export class AcademicCycleService {
     });
 
     if (!session) {
-      throw new AppError("Exam session not found", 404);
+      throw new ApiError(404, "Exam session not found");
     }
 
     const sets = input.setsToGenerate && input.setsToGenerate.length > 0
@@ -276,6 +404,9 @@ export class AcademicCycleService {
       });
       if (!course) continue;
 
+      const eventCode = `${session.sessionCode}_${course.courseCode}_${Date.now() % 10000}`;
+      const title = `${course.courseName} (${course.courseCode}) — ${session.name}`;
+
       // Check if event already exists for this course in this session
       let event = await prisma.assessmentEvent.findFirst({
         where: {
@@ -289,25 +420,46 @@ export class AcademicCycleService {
           data: {
             examSessionId: sessionId,
             courseId,
+            eventCode,
+            title,
             status: "DRAFT",
+          },
+        });
+      }
+
+      // Check or create Blueprint for this event
+      let blueprint = await prisma.assessmentBlueprint.findFirst({
+        where: { assessmentEventId: event.id },
+      });
+
+      if (!blueprint) {
+        blueprint = await prisma.assessmentBlueprint.create({
+          data: {
+            assessmentEventId: event.id,
+            title: `Blueprint for ${course.courseCode} (${session.name})`,
+            examType: session.assessmentType?.code || "SEE",
+            totalMarks: 100,
+            durationMinutes: 180,
           },
         });
       }
 
       // Check or create PaperForms for each requested set
       for (const setCode of sets) {
-        const existingForm = await prisma.paperForm.findFirst({
+        const setNameFormatted = setCode.replace("_", " ");
+        let existingForm = await prisma.paperForm.findFirst({
           where: {
-            assessmentEventId: event.id,
-            formCode: setCode,
+            blueprintId: blueprint.id,
+            setName: setNameFormatted,
           },
         });
 
         if (!existingForm) {
-          const form = await prisma.paperForm.create({
+          existingForm = await prisma.paperForm.create({
             data: {
+              blueprintId: blueprint.id,
               assessmentEventId: event.id,
-              formCode: setCode,
+              setName: setNameFormatted,
               status: "DRAFT",
             },
           });
@@ -315,7 +467,7 @@ export class AcademicCycleService {
           // Create initial PaperVersion v1
           await prisma.paperVersion.create({
             data: {
-              paperFormId: form.id,
+              paperFormId: existingForm.id,
               versionNumber: 1,
               status: "DRAFT",
               contentHash: `INIT-${event.id}-${setCode}-v1`,
@@ -384,8 +536,8 @@ export class AcademicCycleService {
             },
           },
         },
-        registrations: {
-          orderBy: { studentUsn: "asc" },
+        candidates: {
+          orderBy: { usn: "asc" },
         },
         questionUsages: {
           include: {
@@ -398,10 +550,53 @@ export class AcademicCycleService {
     });
 
     if (!event) {
-      throw new AppError("Assessment event not found", 404);
+      throw new ApiError(404, "Assessment event not found");
     }
 
-    return event;
+    return {
+      ...event,
+      course: {
+        ...event.course,
+        code: event.course.courseCode,
+        name: event.course.courseName,
+      },
+      examSession: {
+        ...event.examSession,
+        code: event.examSession.sessionCode,
+        startDate: event.examSession.startsAt,
+        endDate: event.examSession.endsAt,
+        academicTerm: event.examSession.academicTerm
+          ? {
+              ...event.examSession.academicTerm,
+              code: event.examSession.academicTerm.termCode,
+              name: event.examSession.academicTerm.displayName,
+              academicYear: {
+                ...event.examSession.academicTerm.academicYear,
+                code: event.examSession.academicTerm.academicYear.yearCode,
+                name: `Academic Year ${event.examSession.academicTerm.academicYear.yearCode}`,
+              },
+            }
+          : {
+              name: "General Term",
+              termType: "REGULAR",
+              academicYear: { code: "2025-26", name: "AY 2025-26" },
+            },
+        assessmentType: {
+          ...event.examSession.assessmentType,
+          name: event.examSession.assessmentType?.displayName || "SEE",
+        },
+      },
+      paperForms: event.paperForms.map((pf) => ({
+        ...pf,
+        formCode: pf.setName,
+      })),
+      registrations: event.candidates.map((c) => ({
+        ...c,
+        studentUsn: c.usn,
+        cohortYear: c.sourceCohortYear,
+        eligible: c.isEligible,
+      })),
+    };
   }
 
   /**
@@ -413,33 +608,31 @@ export class AcademicCycleService {
     });
 
     if (!event) {
-      throw new AppError("Assessment event not found", 404);
+      throw new ApiError(404, "Assessment event not found");
     }
 
     const created = [];
     for (const c of candidates) {
       const reg = await prisma.assessmentRegistration.upsert({
         where: {
-          assessmentEventId_studentUsn: {
+          assessmentEventId_usn: {
             assessmentEventId: eventId,
-            studentUsn: c.studentUsn,
+            usn: c.studentUsn,
           },
         },
         update: {
           studentName: c.studentName,
           candidateType: c.candidateType || "REGULAR",
-          cohortYear: c.cohortYear,
-          eligible: c.eligible ?? true,
-          remarks: c.remarks,
+          sourceCohortYear: c.cohortYear,
+          isEligible: c.eligible ?? true,
         },
         create: {
           assessmentEventId: eventId,
-          studentUsn: c.studentUsn,
+          usn: c.studentUsn,
           studentName: c.studentName,
           candidateType: c.candidateType || "REGULAR",
-          cohortYear: c.cohortYear,
-          eligible: c.eligible ?? true,
-          remarks: c.remarks,
+          sourceCohortYear: c.cohortYear,
+          isEligible: c.eligible ?? true,
         },
       });
       created.push(reg);
@@ -468,6 +661,7 @@ export class AcademicCycleService {
           include: {
             examSession: {
               include: {
+                academicYear: true,
                 academicTerm: { include: { academicYear: true } },
                 assessmentType: true,
               },
@@ -481,7 +675,7 @@ export class AcademicCycleService {
                 },
               },
             },
-            registrations: true,
+            candidates: true,
             questionUsages: {
               include: {
                 questionVersion: {
@@ -490,24 +684,24 @@ export class AcademicCycleService {
               },
             },
           },
-          orderBy: { examSession: { startDate: "desc" } },
+          orderBy: { examSession: { startsAt: "desc" } },
         },
       },
     });
 
     if (!course) {
-      throw new AppError("Course not found", 404);
+      throw new ApiError(404, "Course not found");
     }
 
     // Aggregate statistics across academic years
     const timeline = course.assessmentEvents.map((evt) => {
       const session = evt.examSession;
       const term = session?.academicTerm;
-      const year = term?.academicYear;
+      const year = term?.academicYear || session?.academicYear;
 
-      const totalCandidates = evt.registrations.length;
-      const backlogCount = evt.registrations.filter((r) => r.candidateType === "BACKLOG").length;
-      const regularCount = evt.registrations.filter((r) => r.candidateType === "REGULAR").length;
+      const totalCandidates = evt.candidates.length;
+      const backlogCount = evt.candidates.filter((r) => r.candidateType === "BACKLOG").length;
+      const regularCount = evt.candidates.filter((r) => r.candidateType === "REGULAR").length;
 
       // Extract unique questions used in this event
       const usedQuestionIds = new Set(
@@ -516,11 +710,11 @@ export class AcademicCycleService {
 
       return {
         eventId: evt.id,
-        academicYear: year?.code || "N/A",
+        academicYear: year?.yearCode || "N/A",
         term: term?.termType || "N/A",
         sessionName: session?.name || "N/A",
         assessmentType: session?.assessmentType?.code || "N/A",
-        scheduledDate: evt.scheduledDate,
+        scheduledDate: evt.scheduledAt,
         status: evt.status,
         paperFormsCount: evt.paperForms.length,
         totalCandidates,
@@ -532,9 +726,9 @@ export class AcademicCycleService {
 
     return {
       courseId: course.id,
-      courseCode: course.code,
-      courseName: course.name,
-      department: course.department.name,
+      courseCode: course.courseCode,
+      courseName: course.courseName,
+      department: course.department?.name || "Autonomous Engineering",
       totalEvents: course.assessmentEvents.length,
       curriculumSchemes: course.curriculumCourses.map((cc) => cc.curriculumVersion.schemeName),
       timeline,

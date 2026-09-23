@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, Users, ShieldCheck, FileLock2, BookOpenCheck, BarChart3, LogOut, Database, CalendarRange, Layers, UserX, GraduationCap } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Users, ShieldCheck, FileLock2, BookOpenCheck, BarChart3, LogOut, Database, CalendarRange, Layers, UserX, GraduationCap, History, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
 import { AppFooter } from '@/components/AppLayout';
 import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarTrigger, SidebarHeader, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
 import { NavLink } from '@/components/NavLink';
+import { AcademicCycleBar } from '@/components/AcademicCycleBar';
 import amcecLogo from '@/assets/amcec-logo.png';
 
 const navigationGroups = [
@@ -12,7 +13,9 @@ const navigationGroups = [
     label: 'Control Center',
     items: [
       { title: 'Executive Dashboard', url: '/controller/dashboard', icon: LayoutDashboard },
-      { title: 'Exam Cycles & Schedules', url: '/controller/create-assessment', icon: CalendarRange },
+      { title: 'Exam Sessions Hub', url: '/controller/exam-sessions', icon: CalendarRange },
+      { title: 'Multi-Year Explorer', url: '/controller/historical-explorer', icon: History },
+      { title: 'Exam Cycles & Schedules', url: '/controller/create-assessment', icon: Sparkles },
       { title: 'Assessment Blueprints', url: '/controller/blueprints', icon: Layers },
       { title: 'Course Allocations', url: '/controller/assign', icon: ClipboardList },
       { title: 'Assigned Papers Grid', url: '/controller/assigned-grid', icon: Layers },
@@ -130,6 +133,9 @@ export default function ControllerLayout({ children }: { children: React.ReactNo
               </div>
             </div>
           </header>
+          <div className="px-6 pt-4 shrink-0">
+            <AcademicCycleBar />
+          </div>
           <main className="flex-1 overflow-auto p-6 bg-background">{children}</main>
           <AppFooter />
         </div>
