@@ -61,7 +61,6 @@ export async function generateAccreditationEvidencePack(
           paperForms: {
             include: {
               snapshots: { orderBy: { orderIndex: "asc" } },
-              vaultRecord: true,
               reviews: true,
             },
           },
