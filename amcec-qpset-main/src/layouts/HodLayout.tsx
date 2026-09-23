@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Home, BookOpen, Users, ClipboardList, PenTool, Eye, FileText, LogOut, Activity, Database, Layers, UserX } from 'lucide-react';
+import { Home, BookOpen, Users, ClipboardList, PenTool, Eye, FileText, LogOut, Activity, Database, Layers, UserX, GraduationCap } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
 import { AppFooter } from '@/components/AppLayout';
@@ -12,6 +12,7 @@ const hodNav = [
   { title: 'Question Bank', url: '/hod/question-bank', icon: Database },
   { title: 'Assessment Blueprints', url: '/hod/blueprints', icon: Layers },
   { title: 'Anonymous BoE Scrutiny', url: '/hod/scrutiny', icon: UserX },
+  { title: 'OBE & Attainment', url: '/hod/attainment', icon: GraduationCap },
   { title: 'Register Courses', url: '/hod/register-courses', icon: BookOpen },
   { title: 'Register QP Setters', url: '/hod/register-qpsetters', icon: Users },
   { title: 'My Assignments', url: '/hod/assignments', icon: ClipboardList },

@@ -35,6 +35,7 @@ import BlueprintManagerPage from "@/pages/blueprints/BlueprintManagerPage";
 import BoeScrutinyPage from "@/pages/scrutiny/BoeScrutinyPage";
 import SchemeOfEvaluationPage from "@/pages/scrutiny/SchemeOfEvaluationPage";
 import StrongRoomVaultPage from "@/pages/vault/StrongRoomVaultPage";
+import ObeAttainmentPage from "@/pages/attainment/ObeAttainmentPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -77,6 +78,7 @@ function AppRoutes() {
       <Route path="/controller/scrutiny" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><BoeScrutinyPage /></ControllerLayout></ProtectedRoute>} />
       <Route path="/controller/scheme-evaluation/:formId" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><SchemeOfEvaluationPage /></ControllerLayout></ProtectedRoute>} />
       <Route path="/controller/vault" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><StrongRoomVaultPage /></ControllerLayout></ProtectedRoute>} />
+      <Route path="/controller/attainment" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><ObeAttainmentPage /></ControllerLayout></ProtectedRoute>} />
 
       {/* HOD routes */}
       <Route path="/hod/dashboard" element={<ProtectedRoute requiredRole="hod"><HodLayout><HodDashboard /></HodLayout></ProtectedRoute>} />
@@ -91,6 +93,7 @@ function AppRoutes() {
       <Route path="/hod/blueprints" element={<ProtectedRoute requiredRole="hod"><HodLayout><BlueprintManagerPage /></HodLayout></ProtectedRoute>} />
       <Route path="/hod/scrutiny" element={<ProtectedRoute requiredRole="hod"><HodLayout><BoeScrutinyPage /></HodLayout></ProtectedRoute>} />
       <Route path="/hod/scheme-evaluation/:formId" element={<ProtectedRoute requiredRole="hod"><HodLayout><SchemeOfEvaluationPage /></HodLayout></ProtectedRoute>} />
+      <Route path="/hod/attainment" element={<ProtectedRoute requiredRole="hod"><HodLayout><ObeAttainmentPage /></HodLayout></ProtectedRoute>} />
 
       {/* QP Setter (Faculty) routes */}
       <Route path="/faculty/dashboard" element={<ProtectedRoute requiredRole="qpsetter"><FacultyLayout><FacultyDashboard /></FacultyLayout></ProtectedRoute>} />
@@ -98,6 +101,7 @@ function AppRoutes() {
       <Route path="/faculty/create-paper" element={<ProtectedRoute requiredRole="qpsetter"><FacultyLayout><CreatePaper /></FacultyLayout></ProtectedRoute>} />
       <Route path="/faculty/preview-paper" element={<ProtectedRoute requiredRole="qpsetter"><FacultyLayout><PreviewPaper /></FacultyLayout></ProtectedRoute>} />
       <Route path="/faculty/question-bank" element={<ProtectedRoute requiredRole="qpsetter"><FacultyLayout><QuestionBankPage /></FacultyLayout></ProtectedRoute>} />
+      <Route path="/faculty/attainment" element={<ProtectedRoute requiredRole="qpsetter"><FacultyLayout><ObeAttainmentPage /></FacultyLayout></ProtectedRoute>} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>

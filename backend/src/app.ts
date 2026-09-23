@@ -28,6 +28,7 @@ import { bankRouter } from "./routes/bank.routes.js";
 import { blueprintRouter } from "./routes/blueprint.routes.js";
 import { scrutinyRouter } from "./routes/scrutiny.routes.js";
 import { vaultRouter } from "./routes/vault.routes.js";
+import { attainmentRouter } from "./routes/attainment.routes.js";
 
 import { randomUUID } from "crypto";
 
@@ -90,6 +91,7 @@ export function createApp() {
   app.use("/api/v1/blueprints", blueprintRouter);
   app.use("/api/v1/scrutiny", scrutinyRouter);
   app.use("/api/v1/vault", vaultRouter);
+  app.use("/api/v1/attainment", attainmentRouter);
 
   app.use(notFound);
   app.use(errorHandler);

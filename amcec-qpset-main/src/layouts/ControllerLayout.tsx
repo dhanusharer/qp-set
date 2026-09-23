@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, Users, ShieldCheck, FileLock2, BookOpenCheck, BarChart3, LogOut, Database, CalendarRange, Layers, UserX } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Users, ShieldCheck, FileLock2, BookOpenCheck, BarChart3, LogOut, Database, CalendarRange, Layers, UserX, GraduationCap } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
 import { AppFooter } from '@/components/AppLayout';
@@ -39,6 +39,7 @@ const navigationGroups = [
     label: 'Intellect & Analytics',
     items: [
       { title: 'Autonomous Question Bank', url: '/controller/question-bank', icon: Database },
+      { title: 'OBE & VTU Attainment', url: '/controller/attainment', icon: GraduationCap },
       { title: 'Analytics & Compliance', url: '/controller/reports', icon: BarChart3 },
       { title: 'Intellectual Repository', url: '/controller/repository', icon: Database },
     ]
