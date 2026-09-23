@@ -101,6 +101,7 @@ model User {
   authoredQuestions    Question[]        @relation("QuestionAuthor")
   authoredVersions     QuestionVersion[] @relation("QuestionVersionAuthor")
   reviewsGiven         QuestionReview[]  @relation("ReviewAuthor")
+  scrutinyReviews      PaperScrutinyReview[]
 
   // Other relations
   notifications        Notification[] @relation("UserNotifications")
@@ -521,6 +522,7 @@ model PaperForm {
   setName          String              // e.g. "Set A", "Set B", "Set C (Reserve)"
   status           String              @default("GENERATED") // "GENERATED", "UNDER_SCRUTINY", "APPROVED", "SEALED"
   snapshots        PaperItemSnapshot[]
+  reviews          PaperScrutinyReview[]
   equivalenceScore Float?              // e.g. 98.5% equivalence
   bloomVariance    Float?              // e.g. 2.1%
   coVariance       Float?              // e.g. 1.8%
@@ -552,6 +554,24 @@ model PaperItemSnapshot {
 
   @@index([paperFormId])
   @@index([questionVersionId])
+}
+
+// ─── Anonymous BoE Scrutiny Review ───────────────────────
+
+model PaperScrutinyReview {
+  id          Int       @id @default(autoincrement())
+  paperFormId Int
+  paperForm   PaperForm @relation(fields: [paperFormId], references: [id], onDelete: Cascade)
+  reviewerId  Int
+  reviewer    User      @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+  stage       String    // "PEDAGOGICAL", "LINGUISTIC", "COE_APPROVAL"
+  verdict     String    // "APPROVED", "CHANGES_REQUESTED", "REJECTED"
+  comments    String
+  checklist   Json?     // { syllabusCovered: boolean, bloomsValid: boolean, noAmbiguity: boolean, marksSumValid: boolean }
+  createdAt   DateTime  @default(now())
+
+  @@index([paperFormId])
+  @@index([reviewerId])
 }
 
 

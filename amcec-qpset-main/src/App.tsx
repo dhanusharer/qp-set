@@ -32,6 +32,8 @@ import CreatePaper from "@/pages/faculty/CreatePaper";
 import PreviewPaper from "@/pages/faculty/PreviewPaper";
 import QuestionBankPage from "@/pages/bank/QuestionBankPage";
 import BlueprintManagerPage from "@/pages/blueprints/BlueprintManagerPage";
+import BoeScrutinyPage from "@/pages/scrutiny/BoeScrutinyPage";
+import SchemeOfEvaluationPage from "@/pages/scrutiny/SchemeOfEvaluationPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -71,6 +73,8 @@ function AppRoutes() {
       <Route path="/controller/assigned-grid" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><AssignedPapersGrid /></ControllerLayout></ProtectedRoute>} />
       <Route path="/controller/question-bank" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><QuestionBankPage /></ControllerLayout></ProtectedRoute>} />
       <Route path="/controller/blueprints" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><BlueprintManagerPage /></ControllerLayout></ProtectedRoute>} />
+      <Route path="/controller/scrutiny" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><BoeScrutinyPage /></ControllerLayout></ProtectedRoute>} />
+      <Route path="/controller/scheme-evaluation/:formId" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><SchemeOfEvaluationPage /></ControllerLayout></ProtectedRoute>} />
 
       {/* HOD routes */}
       <Route path="/hod/dashboard" element={<ProtectedRoute requiredRole="hod"><HodLayout><HodDashboard /></HodLayout></ProtectedRoute>} />
@@ -83,6 +87,8 @@ function AppRoutes() {
       <Route path="/hod/scheme" element={<ProtectedRoute requiredRole="hod"><HodLayout><HodScheme /></HodLayout></ProtectedRoute>} />
       <Route path="/hod/question-bank" element={<ProtectedRoute requiredRole="hod"><HodLayout><QuestionBankPage /></HodLayout></ProtectedRoute>} />
       <Route path="/hod/blueprints" element={<ProtectedRoute requiredRole="hod"><HodLayout><BlueprintManagerPage /></HodLayout></ProtectedRoute>} />
+      <Route path="/hod/scrutiny" element={<ProtectedRoute requiredRole="hod"><HodLayout><BoeScrutinyPage /></HodLayout></ProtectedRoute>} />
+      <Route path="/hod/scheme-evaluation/:formId" element={<ProtectedRoute requiredRole="hod"><HodLayout><SchemeOfEvaluationPage /></HodLayout></ProtectedRoute>} />
 
       {/* QP Setter (Faculty) routes */}
       <Route path="/faculty/dashboard" element={<ProtectedRoute requiredRole="qpsetter"><FacultyLayout><FacultyDashboard /></FacultyLayout></ProtectedRoute>} />

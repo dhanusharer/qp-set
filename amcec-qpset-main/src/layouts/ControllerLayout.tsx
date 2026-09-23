@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, Users, ShieldCheck, FileLock2, BookOpenCheck, BarChart3, LogOut, Database, CalendarRange, Layers } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Users, ShieldCheck, FileLock2, BookOpenCheck, BarChart3, LogOut, Database, CalendarRange, Layers, UserX } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
 import { AppFooter } from '@/components/AppLayout';
@@ -21,6 +21,7 @@ const navigationGroups = [
   {
     label: 'Quality & Security',
     items: [
+      { title: 'Anonymous BoE Scrutiny', url: '/controller/scrutiny', icon: UserX },
       { title: 'Academic Quality Audit', url: '/controller/review', icon: ShieldCheck },
       { title: 'Security & Access Logs', url: '/controller/security', icon: FileLock2 },
     ]
