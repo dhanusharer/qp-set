@@ -22,6 +22,9 @@ const rejectQueue = () => {
 };
 
 function handleAuthFailure() {
+  // Clear tab-isolated session
+  sessionStorage.removeItem('amcec_access_token');
+  sessionStorage.removeItem('amcec_user');
   // Notify contexts to reset auth state
   window.dispatchEvent(new Event('auth-logout'));
   if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
@@ -55,6 +58,11 @@ async function performTokenRefresh(): Promise<void> {
 
     const result = await res.json();
     if (!result.success) throw new Error('Token refresh failed');
+
+    // Update tab-scoped token if returned
+    if (result.data?.accessToken) {
+      sessionStorage.setItem('amcec_access_token', result.data.accessToken);
+    }
   } catch (err) {
     handleAuthFailure();
     throw err;
@@ -90,6 +98,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const headers = new Headers(options.headers);
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
+  }
+
+  // Attach tab-scoped Authorization Bearer header if available
+  const sessionToken = sessionStorage.getItem('amcec_access_token');
+  if (sessionToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${sessionToken}`);
   }
 
   // Attach CSRF header for state-changing requests

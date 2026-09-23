@@ -122,7 +122,9 @@ authRouter.post("/login", authRateLimit, validateBody(loginSchema), async (req, 
   // 7. Set cookies
   res.clearCookie("refreshToken", { ...cookieOptions, path: "/" }); // Clean legacy root cookie
 
-  res.cookie("accessToken", accessToken(user), {
+  const tokenStr = accessToken(user);
+
+  res.cookie("accessToken", tokenStr, {
     ...cookieOptions,
     maxAge: 15 * 60 * 1000 // 15 mins
   });
@@ -143,6 +145,7 @@ authRouter.post("/login", authRateLimit, validateBody(loginSchema), async (req, 
     success: true,
     data: {
       user: publicUser(user),
+      accessToken: tokenStr,
       csrfToken
     }
   });
@@ -151,6 +154,7 @@ authRouter.post("/login", authRateLimit, validateBody(loginSchema), async (req, 
 authRouter.get("/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.sub } });
   const csrfToken = req.cookies["csrf-token"] || crypto.randomUUID();
+  const tokenStr = accessToken(user);
   
   res.cookie("csrf-token", csrfToken, {
     ...cookieOptions,
@@ -162,6 +166,7 @@ authRouter.get("/me", requireAuth, async (req, res) => {
     success: true,
     data: {
       user: publicUser(user),
+      accessToken: tokenStr,
       csrfToken
     }
   });
@@ -296,7 +301,8 @@ authRouter.post("/refresh", authRateLimit, async (req, res) => {
   res.json({
     success: true,
     data: {
-      user: publicUser(user)
+      user: publicUser(user),
+      accessToken: newAccess
     }
   });
 });

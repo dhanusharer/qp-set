@@ -12,7 +12,9 @@ vi.mock("../src/db.js", () => {
   const mockPrisma = {
     user: {
       create: vi.fn(),
-      findMany: vi.fn()
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      findFirst: vi.fn()
     },
     course: {
       create: vi.fn(),
@@ -64,6 +66,7 @@ describe("CRUD and Transaction Endpoints", () => {
         name: "New Faculty"
       };
 
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(null as any);
       vi.mocked(prisma.user.create).mockResolvedValue(newUser as any);
 
       const res = await request(app)

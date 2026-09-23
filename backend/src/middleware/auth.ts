@@ -19,11 +19,13 @@ declare global {
 }
 
 export function requireAuth(req: Request, _res: Response, next: NextFunction) {
-  let token = req.cookies?.accessToken;
+  // 1. Prioritize explicit tab-scoped Authorization: Bearer token (prevents multi-tab cookie collisions)
+  const header = req.header("authorization");
+  let token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
 
+  // 2. Fall back to ambient cookie if Authorization header is not present
   if (!token) {
-    const header = req.header("authorization");
-    token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+    token = req.cookies?.accessToken;
   }
 
   if (!token) throw new ApiError(401, "Missing access token");

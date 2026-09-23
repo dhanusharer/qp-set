@@ -70,6 +70,7 @@ const createTestWrapper = () => {
 
 describe("Context Providers", () => {
   beforeEach(() => {
+    sessionStorage.clear();
     vi.restoreAllMocks();
     // Re-mock after restoreAllMocks
     vi.mocked(apiClient.get).mockResolvedValue({ success: true, data: [] });
@@ -77,7 +78,8 @@ describe("Context Providers", () => {
     vi.mocked(apiClient.patch).mockResolvedValue({ success: true, data: {} });
   });
 
-  it("restores session user on mount when auth cookies are valid", async () => {
+  it("restores session user on mount when session token is present", async () => {
+    sessionStorage.setItem("amcec_access_token", "saved-token-123");
     vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
       if (url === "/auth/me") {
         return {
@@ -128,6 +130,7 @@ describe("Context Providers", () => {
       { id: 99, userId: 1, message: "New Assignment", read: false }
     ];
 
+    sessionStorage.setItem("amcec_access_token", "test-token");
     vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
       if (url === "/auth/me") {
         return { success: true, data: { user: { id: 1, username: "user", role: "hod", name: "User" } } };

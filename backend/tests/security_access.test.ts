@@ -159,7 +159,10 @@ describe("Security Scoped Access & IDOR Guards", () => {
         dept: "CSE"
       };
 
-      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockHod as any);
+      vi.mocked(prisma.user.findUnique).mockImplementation(async (args: any) => {
+        if (args?.where?.id) return mockHod as any;
+        return null;
+      });
       vi.mocked(prisma.user.create).mockResolvedValue({ id: 10, username: "new_fac", role: "qpsetter" } as any);
 
       const res = await request(app)
