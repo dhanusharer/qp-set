@@ -18,7 +18,11 @@ import {
   Sparkles, 
   Layers,
   MapPin,
-  RefreshCw
+  RefreshCw,
+  FileCheck2,
+  CheckCircle,
+  ShieldAlert,
+  FileText
 } from 'lucide-react';
 import { MathView } from '@/components/MathView';
 import apiClient from '@/lib/apiClient';
@@ -31,6 +35,10 @@ export default function StrongRoomVaultPage() {
 
   // Sealed Package Modal State
   const [sealedResult, setSealedResult] = useState<any>(null);
+
+  // Integrity Verification Modal State
+  const [integrityModal, setIntegrityModal] = useState<any>(null);
+  const [verifyingId, setVerifyingId] = useState<number | null>(null);
 
   // Unsealing Modal State
   const [unsealingPaper, setUnsealingPaper] = useState<any>(null);
@@ -130,6 +138,22 @@ export default function StrongRoomVaultPage() {
     toast.success(`Copied ${label} to clipboard`);
   };
 
+  const handleVerifyIntegrity = async (formId: number) => {
+    try {
+      setVerifyingId(formId);
+      const res: any = await apiClient.get(`/vault/papers/${formId}/integrity`);
+      if (res?.success) {
+        setIntegrityModal(res.certificate);
+      } else {
+        toast.error('Failed to retrieve RFC 8785 integrity certificate');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Integrity verification failed');
+    } finally {
+      setVerifyingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6 p-6 max-w-7xl mx-auto">
       {/* Top Banner */}
@@ -206,7 +230,7 @@ export default function StrongRoomVaultPage() {
                       </div>
                     </div>
 
-                    <div className="pt-1">
+                    <div className="pt-1 flex flex-col gap-2">
                       {!isSealed ? (
                         <Button
                           size="sm"
@@ -226,6 +250,17 @@ export default function StrongRoomVaultPage() {
                           <Unlock className="w-3.5 h-3.5" /> Unseal Paper (3-of-5 Ceremony)
                         </Button>
                       )}
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full text-xs border-indigo-200 dark:border-indigo-900/50 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 flex items-center justify-center gap-1.5 text-indigo-700 dark:text-indigo-300"
+                        disabled={verifyingId === paper.id}
+                        onClick={() => handleVerifyIntegrity(paper.id)}
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        {verifyingId === paper.id ? 'Verifying RFC 8785...' : 'Verify RFC 8785 Integrity'}
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -469,6 +504,153 @@ export default function StrongRoomVaultPage() {
             <DialogFooter>
               <Button size="sm" onClick={() => setPrintPaper(null)}>
                 Close Print Station
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* RFC 8785 Forensic Integrity Certificate Modal */}
+      {integrityModal && (
+        <Dialog open={!!integrityModal} onOpenChange={() => setIntegrityModal(null)}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-6">
+            <DialogHeader className="border-b pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileCheck2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  <DialogTitle className="text-base font-bold text-foreground">
+                    Cryptographic Integrity Verification Certificate
+                  </DialogTitle>
+                </div>
+                <Badge
+                  className={
+                    integrityModal.status === 'VERIFIED'
+                      ? 'bg-emerald-600 text-white font-semibold'
+                      : 'bg-rose-600 text-white font-semibold'
+                  }
+                >
+                  {integrityModal.status === 'VERIFIED' ? '✓ RFC 8785 MATCHED' : '⚠ TAMPER DETECTED'}
+                </Badge>
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-4 py-3 text-xs">
+              {/* Paper metadata overview */}
+              <div className="p-3 rounded-lg border bg-muted/30 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">Examination Paper</span>
+                  <span className="font-semibold text-foreground">{integrityModal.setName}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">Course Code</span>
+                  <span className="font-semibold text-foreground">{integrityModal.courseCode}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">Sealing Status</span>
+                  <Badge variant="outline" className="text-[10px] uppercase font-mono">
+                    {integrityModal.isSealed ? 'Sealed in Vault' : 'Pre-Seal Scrutiny'}
+                  </Badge>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">Item Snapshots</span>
+                  <span className="font-semibold text-foreground">{integrityModal.itemCount} Questions</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">BoE Scrutiny Reviews</span>
+                  <span className="font-semibold text-foreground">{integrityModal.scrutinyReviewsCount} Recorded</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">Envelope Security</span>
+                  <span className="font-mono text-indigo-600 dark:text-indigo-400 font-semibold">
+                    {integrityModal.envelopeConfig?.cipher || 'AES-256-GCM'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Status Alert Banner */}
+              <div
+                className={`p-3.5 rounded-lg border flex items-start gap-3 ${
+                  integrityModal.status === 'VERIFIED'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
+                    : 'bg-rose-500/10 border-rose-500/30 text-rose-900 dark:text-rose-200'
+                }`}
+              >
+                {integrityModal.status === 'VERIFIED' ? (
+                  <CheckCircle className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
+                ) : (
+                  <ShieldAlert className="w-5 h-5 text-rose-600 mt-0.5 shrink-0" />
+                )}
+                <div>
+                  <h4 className="font-bold text-sm">
+                    {integrityModal.status === 'VERIFIED'
+                      ? 'Forensic Verification Passed — Zero Discrepancies'
+                      : 'Integrity Verification Discrepancy'}
+                  </h4>
+                  <p className="mt-0.5 text-xs opacity-90 leading-relaxed">
+                    {integrityModal.explanation}
+                  </p>
+                </div>
+              </div>
+
+              {/* Cryptographic Hash Comparison */}
+              <div className="space-y-3 p-4 rounded-xl border bg-slate-900 text-slate-100 font-mono text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-indigo-400 font-bold uppercase tracking-wider">
+                    RFC 8785 Canonical JSON Digests:
+                  </span>
+                  <Badge variant="outline" className="text-[10px] text-slate-400 border-slate-700">
+                    SHA-256
+                  </Badge>
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                      <span>Live Computed RFC 8785 Canonical Hash:</span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-5 px-1.5 text-[10px] text-slate-400 hover:text-white hover:bg-slate-800"
+                        onClick={() => copyToClipboard(integrityModal.liveCanonicalHash, 'Live Hash')}
+                      >
+                        <Copy className="w-3 h-3 mr-1" /> Copy
+                      </Button>
+                    </div>
+                    <p className="p-2 rounded bg-black/50 border border-slate-800 break-all text-[11px] text-emerald-400">
+                      {integrityModal.liveCanonicalHash}
+                    </p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                      <span>Vault Sealed Manifest Digest:</span>
+                      {integrityModal.sealedDigest && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 px-1.5 text-[10px] text-slate-400 hover:text-white hover:bg-slate-800"
+                          onClick={() => copyToClipboard(integrityModal.sealedDigest, 'Sealed Digest')}
+                        >
+                          <Copy className="w-3 h-3 mr-1" /> Copy
+                        </Button>
+                      )}
+                    </div>
+                    <p className="p-2 rounded bg-black/50 border border-slate-800 break-all text-[11px] text-sky-400">
+                      {integrityModal.sealedDigest || '(Paper not yet sealed; live canonical hash shown above)'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex justify-between items-center">
+                  <span>Verified at: {integrityModal.verifiedAt}</span>
+                  <span className="text-emerald-400 font-semibold">Strict Canonical Key Sorting Applied</span>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button size="sm" onClick={() => setIntegrityModal(null)}>
+                Dismiss Certificate
               </Button>
             </DialogFooter>
           </DialogContent>

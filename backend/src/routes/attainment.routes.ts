@@ -10,6 +10,7 @@ import {
   ScalingConfig,
   StudentMarkEntry,
 } from "../utils/attainmentEngine.js";
+import { generateAccreditationEvidencePack } from "../services/evidencePack.service.js";
 
 export const attainmentRouter = Router();
 
@@ -250,3 +251,28 @@ attainmentRouter.get(
     });
   }
 );
+
+// ─── Route: 18-Part NBA / NAAC Accreditation Evidence Pack ─
+
+attainmentRouter.get(
+  "/evidence/pack/:courseOfferingId",
+  requireAuth,
+  requireRole("controller", "hod", "qpsetter"),
+  async (req: Request, res: Response) => {
+    const courseOfferingId = parseInt(req.params.courseOfferingId, 10);
+    if (isNaN(courseOfferingId)) {
+      return res.status(400).json({ error: "Invalid courseOfferingId" });
+    }
+
+    const pack = await generateAccreditationEvidencePack(courseOfferingId);
+    if (!pack) {
+      return res.status(404).json({ error: "Course offering not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      evidencePack: pack,
+    });
+  }
+);
+
