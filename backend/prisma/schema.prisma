@@ -47,6 +47,24 @@ enum NotificationKind {
   general
 }
 
+enum BloomsLevel {
+  L1
+  L2
+  L3
+  L4
+  L5
+  L6
+}
+
+enum QuestionStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_REVIEW
+  APPROVED
+  REVISION_REQUESTED
+  RETIRED
+}
+
 // ─── User ────────────────────────────────────────────────
 
 model User {
@@ -57,6 +75,8 @@ model User {
   name          String
   title         String?      // Controller title / HOD designation title
   dept          String?      // Department — used by HOD & faculty
+  departmentId  Int?
+  department    Department?  @relation("DeptUsers", fields: [departmentId], references: [id], onDelete: SetNull)
   email         String?      @unique
   phone         String?
   qualification String?
@@ -76,6 +96,12 @@ model User {
   hodAssignments       Assignment[]   @relation("HodAssignments")
   createdAssignments   Assignment[]   @relation("AssignerAssignments")
 
+  // Academic & Question Bank relations
+  headedDepartments    Department[]      @relation("DeptHod")
+  authoredQuestions    Question[]        @relation("QuestionAuthor")
+  authoredVersions     QuestionVersion[] @relation("QuestionVersionAuthor")
+  reviewsGiven         QuestionReview[]  @relation("ReviewAuthor")
+
   // Other relations
   notifications        Notification[] @relation("UserNotifications")
   sentNotifications    Notification[] @relation("NotificationSender")
@@ -91,6 +117,7 @@ model User {
   updatedAt     DateTime     @updatedAt
 
   @@index([hodId])
+  @@index([departmentId])
   @@index([role])
 }
 
@@ -109,14 +136,21 @@ model Course {
   hodId            Int
   hod              User         @relation(fields: [hodId], references: [id])
 
+  departmentId     Int?
+  department       Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
   assignments      Assignment[]
   schemes          Scheme[]
+  offerings        CourseOffering[]
+  courseOutcomes   CourseOutcome[]
+  questions        Question[]
 
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
   @@unique([courseCode, semester, schemeYear])
   @@index([hodId])
+  @@index([departmentId])
 }
 
 // ─── Scheme (QP Blueprint) ───────────────────────────────
@@ -288,3 +322,142 @@ model Assessment {
   assignments    Assignment[]
   createdAt      DateTime     @default(now())
 }
+
+// ─── Department ──────────────────────────────────────────
+
+model Department {
+  id              Int              @id @default(autoincrement())
+  code            String           @unique
+  name            String
+  hodId           Int?
+  hod             User?            @relation("DeptHod", fields: [hodId], references: [id], onDelete: SetNull)
+  courses         Course[]
+  users           User[]           @relation("DeptUsers")
+  courseOfferings CourseOffering[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+// ─── Course Offering ─────────────────────────────────────
+
+model CourseOffering {
+  id           Int         @id @default(autoincrement())
+  courseId     Int
+  course       Course      @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  academicYear String      // e.g. "2025-2026"
+  semester     String      // e.g. "6"
+  schemeYear   String      // e.g. "2022"
+  departmentId Int?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([courseId, academicYear, semester, schemeYear])
+  @@index([courseId])
+  @@index([departmentId])
+}
+
+// ─── Course Outcome (CO) ─────────────────────────────────
+
+model CourseOutcome {
+  id            Int            @id @default(autoincrement())
+  courseId      Int
+  course        Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  coCode        String         // e.g. "CO1", "CO2"
+  description   String
+  targetMarks   Int?
+  questionParts QuestionPart[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([courseId, coCode])
+  @@index([courseId])
+}
+
+// ─── Question Master ─────────────────────────────────────
+
+model Question {
+  id               Int              @id @default(autoincrement())
+  code             String           @unique // e.g. "Q-CSE-2026-0001"
+  courseId         Int
+  course           Course           @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  unitNumber       Int              // VTU Unit 1..5
+  topic            String
+  subtopic         String?
+  status           QuestionStatus   @default(DRAFT)
+  authorId         Int
+  author           User             @relation("QuestionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  currentVersionNo Int              @default(1)
+  versions         QuestionVersion[]
+  reviews          QuestionReview[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([courseId, unitNumber])
+  @@index([authorId])
+  @@index([status])
+}
+
+// ─── Question Version ────────────────────────────────────
+
+model QuestionVersion {
+  id                Int            @id @default(autoincrement())
+  questionId        Int
+  question          Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  versionNumber     Int
+  stemRichJson      Json           // TipTap JSON (rich content, LaTeX, embedded SVG data)
+  plainText         String         // Plain text for searching
+  contentBlindIndex String?        // HMAC-SHA256 blind index
+  encryptedContent  String?        // AES-256-GCM ciphertext
+  iv                String?        // 96-bit IV
+  authTag           String?        // 128-bit GCM auth tag
+  parts             QuestionPart[]
+  createdById       Int
+  createdBy         User           @relation("QuestionVersionAuthor", fields: [createdById], references: [id], onDelete: Restrict)
+  changeLog         String?
+  createdAt         DateTime       @default(now())
+
+  @@unique([questionId, versionNumber])
+  @@index([questionId])
+  @@index([createdById])
+  @@index([contentBlindIndex])
+}
+
+// ─── Question Part ───────────────────────────────────────
+
+model QuestionPart {
+  id                Int             @id @default(autoincrement())
+  questionVersionId Int
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  partLabel         String          // e.g. "(a)", "(b)", "(c)"
+  marks             Int
+  bloomsLevel       BloomsLevel
+  courseOutcomeId   Int?
+  courseOutcome     CourseOutcome?  @relation(fields: [courseOutcomeId], references: [id], onDelete: SetNull)
+  coCode            String?         // Denormalized e.g. "CO1"
+  markingRubric     Json?           // Array of { stepNo: number, description: string, marks: number }
+  modelAnswerJson   Json?           // Rich text / LaTeX model solution
+  orderIndex        Int             @default(0)
+  createdAt         DateTime        @default(now())
+
+  @@index([questionVersionId])
+  @@index([courseOutcomeId])
+}
+
+// ─── Question Review ─────────────────────────────────────
+
+model QuestionReview {
+  id         Int      @id @default(autoincrement())
+  questionId Int
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  reviewerId Int
+  reviewer   User     @relation("ReviewAuthor", fields: [reviewerId], references: [id], onDelete: Restrict)
+  stage      String   // "PEDAGOGICAL", "LINGUISTIC", "BOE_FINAL"
+  verdict    String   // "APPROVED", "CHANGES_REQUESTED", "REJECTED"
+  comments   String
+  createdAt  DateTime @default(now())
+
+  @@index([questionId])
+  @@index([reviewerId])
+}
+

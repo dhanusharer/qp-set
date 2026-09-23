@@ -24,6 +24,7 @@ import { assignmentsRouter } from "./routes/assignments.routes.js";
 import { notificationsRouter } from "./routes/notifications.routes.js";
 import { schemesRouter } from "./routes/schemes.routes.js";
 import { assessmentsRouter } from "./routes/assessments.routes.js";
+import { bankRouter } from "./routes/bank.routes.js";
 
 import { randomUUID } from "crypto";
 
@@ -82,6 +83,7 @@ export function createApp() {
   app.use("/api/v1/notifications", notificationsRouter);
   app.use("/api/v1/schemes", schemesRouter);
   app.use("/api/v1/assessments", assessmentsRouter);
+  app.use("/api/v1/bank", bankRouter);
 
   app.use(notFound);
   app.use(errorHandler);

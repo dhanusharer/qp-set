@@ -35,6 +35,7 @@ const navigationGroups = [
   {
     label: 'Intellect & Analytics',
     items: [
+      { title: 'Autonomous Question Bank', url: '/controller/question-bank', icon: Database },
       { title: 'Analytics & Compliance', url: '/controller/reports', icon: BarChart3 },
       { title: 'Intellectual Repository', url: '/controller/repository', icon: Database },
     ]

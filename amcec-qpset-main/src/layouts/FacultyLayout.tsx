@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Home, ClipboardList, PenTool, Eye, LogOut } from 'lucide-react';
+import { Home, ClipboardList, PenTool, Eye, LogOut, Database } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
 import { AppFooter } from '@/components/AppLayout';
@@ -9,6 +9,7 @@ import amcecLogo from '@/assets/amcec-logo.png';
 
 const facultyNav = [
   { title: 'My Dashboard', url: '/faculty/dashboard', icon: Home },
+  { title: 'Question Bank', url: '/faculty/question-bank', icon: Database },
   { title: 'My Assignments', url: '/faculty/assignments', icon: ClipboardList },
   { title: 'Create Paper', url: '/faculty/create-paper', icon: PenTool },
   { title: 'Preview Paper', url: '/faculty/preview-paper', icon: Eye },

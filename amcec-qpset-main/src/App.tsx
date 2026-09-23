@@ -30,6 +30,7 @@ import FacultyDashboard from "@/pages/faculty/FacultyDashboard";
 import FacultyAssignments from "@/pages/faculty/FacultyAssignments";
 import CreatePaper from "@/pages/faculty/CreatePaper";
 import PreviewPaper from "@/pages/faculty/PreviewPaper";
+import QuestionBankPage from "@/pages/bank/QuestionBankPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -67,6 +68,7 @@ function AppRoutes() {
       <Route path="/controller/courses-db" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><CourseDatabase /></ControllerLayout></ProtectedRoute>} />
       <Route path="/controller/repository" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><IntellectualRepository /></ControllerLayout></ProtectedRoute>} />
       <Route path="/controller/assigned-grid" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><AssignedPapersGrid /></ControllerLayout></ProtectedRoute>} />
+      <Route path="/controller/question-bank" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><QuestionBankPage /></ControllerLayout></ProtectedRoute>} />
 
       {/* HOD routes */}
       <Route path="/hod/dashboard" element={<ProtectedRoute requiredRole="hod"><HodLayout><HodDashboard /></HodLayout></ProtectedRoute>} />
@@ -77,12 +79,14 @@ function AppRoutes() {
       <Route path="/hod/create-paper" element={<ProtectedRoute requiredRole="hod"><HodLayout><CreatePaper /></HodLayout></ProtectedRoute>} />
       <Route path="/hod/preview-paper" element={<ProtectedRoute requiredRole="hod"><HodLayout><PreviewPaper /></HodLayout></ProtectedRoute>} />
       <Route path="/hod/scheme" element={<ProtectedRoute requiredRole="hod"><HodLayout><HodScheme /></HodLayout></ProtectedRoute>} />
+      <Route path="/hod/question-bank" element={<ProtectedRoute requiredRole="hod"><HodLayout><QuestionBankPage /></HodLayout></ProtectedRoute>} />
 
       {/* QP Setter (Faculty) routes */}
       <Route path="/faculty/dashboard" element={<ProtectedRoute requiredRole="qpsetter"><FacultyLayout><FacultyDashboard /></FacultyLayout></ProtectedRoute>} />
       <Route path="/faculty/assignments" element={<ProtectedRoute requiredRole="qpsetter"><FacultyLayout><FacultyAssignments /></FacultyLayout></ProtectedRoute>} />
       <Route path="/faculty/create-paper" element={<ProtectedRoute requiredRole="qpsetter"><FacultyLayout><CreatePaper /></FacultyLayout></ProtectedRoute>} />
       <Route path="/faculty/preview-paper" element={<ProtectedRoute requiredRole="qpsetter"><FacultyLayout><PreviewPaper /></FacultyLayout></ProtectedRoute>} />
+      <Route path="/faculty/question-bank" element={<ProtectedRoute requiredRole="qpsetter"><FacultyLayout><QuestionBankPage /></FacultyLayout></ProtectedRoute>} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>
