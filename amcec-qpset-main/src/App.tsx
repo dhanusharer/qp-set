@@ -34,6 +34,7 @@ import QuestionBankPage from "@/pages/bank/QuestionBankPage";
 import BlueprintManagerPage from "@/pages/blueprints/BlueprintManagerPage";
 import BoeScrutinyPage from "@/pages/scrutiny/BoeScrutinyPage";
 import SchemeOfEvaluationPage from "@/pages/scrutiny/SchemeOfEvaluationPage";
+import StrongRoomVaultPage from "@/pages/vault/StrongRoomVaultPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -75,6 +76,7 @@ function AppRoutes() {
       <Route path="/controller/blueprints" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><BlueprintManagerPage /></ControllerLayout></ProtectedRoute>} />
       <Route path="/controller/scrutiny" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><BoeScrutinyPage /></ControllerLayout></ProtectedRoute>} />
       <Route path="/controller/scheme-evaluation/:formId" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><SchemeOfEvaluationPage /></ControllerLayout></ProtectedRoute>} />
+      <Route path="/controller/vault" element={<ProtectedRoute requiredRole="controller"><ControllerLayout><StrongRoomVaultPage /></ControllerLayout></ProtectedRoute>} />
 
       {/* HOD routes */}
       <Route path="/hod/dashboard" element={<ProtectedRoute requiredRole="hod"><HodLayout><HodDashboard /></HodLayout></ProtectedRoute>} />

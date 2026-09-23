@@ -21,6 +21,7 @@ const navigationGroups = [
   {
     label: 'Quality & Security',
     items: [
+      { title: 'Strong Room Vault', url: '/controller/vault', icon: FileLock2 },
       { title: 'Anonymous BoE Scrutiny', url: '/controller/scrutiny', icon: UserX },
       { title: 'Academic Quality Audit', url: '/controller/review', icon: ShieldCheck },
       { title: 'Security & Access Logs', url: '/controller/security', icon: FileLock2 },
