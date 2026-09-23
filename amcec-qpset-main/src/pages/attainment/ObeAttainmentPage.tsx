@@ -115,7 +115,7 @@ const PO_DEFINITIONS: Record<string, string> = {
   PSO2: 'Intelligent Enterprise Systems',
 };
 
-export const EVIDENCE_SECTION_META = [
+const EVIDENCE_SECTION_META = [
   { key: 'section1_Syllabus', num: '01', title: 'Syllabus & Academic Spine', tag: 'NBA Criterion 3.1 / NAAC 2.6' },
   { key: 'section2_CourseOutcomes', num: '02', title: 'Course Outcome (CO) Articulations', tag: 'NBA Criterion 3.1.1' },
   { key: 'section3_AssessmentBlueprint', num: '03', title: 'Assessment Blueprint & Weightings', tag: 'NBA Criterion 3.2.1' },
