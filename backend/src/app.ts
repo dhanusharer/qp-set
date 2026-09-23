@@ -30,6 +30,7 @@ import { scrutinyRouter } from "./routes/scrutiny.routes.js";
 import { vaultRouter } from "./routes/vault.routes.js";
 import { attainmentRouter } from "./routes/attainment.routes.js";
 import { psychometricsRouter } from "./routes/psychometrics.routes.js";
+import { regulationRouter } from "./routes/regulation.routes.js";
 
 import { randomUUID } from "crypto";
 
@@ -94,6 +95,7 @@ export function createApp() {
   app.use("/api/v1/vault", vaultRouter);
   app.use("/api/v1/attainment", attainmentRouter);
   app.use("/api/v1/psychometrics", psychometricsRouter);
+  app.use("/api/v1/regulations", regulationRouter);
 
   app.use(notFound);
   app.use(errorHandler);

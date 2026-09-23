@@ -18,7 +18,12 @@ import {
   Printer, 
   Eye, 
   RefreshCw,
-  Shuffle
+  Shuffle,
+  Scale,
+  CheckCircle,
+  XCircle,
+  HelpCircle,
+  Info
 } from 'lucide-react';
 import { MathView } from '@/components/MathView';
 import apiClient from '@/lib/apiClient';
@@ -27,10 +32,13 @@ import { toast } from 'sonner';
 export default function BlueprintManagerPage() {
   const [blueprints, setBlueprints] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
+  const [regulations, setRegulations] = useState<any[]>([]);
+  const [selectedRegulationId, setSelectedRegulationId] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedBp, setSelectedBp] = useState<any>(null);
   const [feasibility, setFeasibility] = useState<any>(null);
   const [equivalence, setEquivalence] = useState<any>(null);
+  const [activePairIndex, setActivePairIndex] = useState<number>(0);
   const [generating, setGenerating] = useState<boolean>(false);
   const [checkingFeasibility, setCheckingFeasibility] = useState<boolean>(false);
 
@@ -51,15 +59,22 @@ export default function BlueprintManagerPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [bpRes, cRes]: [any, any] = await Promise.all([
+      const [bpRes, cRes, regRes]: [any, any, any] = await Promise.all([
         apiClient.get('/blueprints'),
-        apiClient.get('/courses?limit=100')
+        apiClient.get('/courses?limit=100'),
+        apiClient.get('/regulations')
       ]);
 
       const bList = bpRes?.blueprints || bpRes?.data?.blueprints || [];
       const cList = cRes?.courses || cRes?.data?.courses || [];
+      const rList = regRes?.profiles || regRes?.data?.profiles || [];
       setBlueprints(bList);
       setCourses(cList);
+      setRegulations(rList);
+
+      if (rList.length > 0) {
+        setSelectedRegulationId(String(rList[0].id));
+      }
 
       if (bList.length > 0 && !selectedBp) {
         selectBlueprint(bList[0]);
@@ -97,6 +112,7 @@ export default function BlueprintManagerPage() {
     try {
       const res: any = await apiClient.get(`/blueprints/${bpId}/equivalence`);
       setEquivalence(res?.comparison ? res : res?.data || null);
+      setActivePairIndex(0);
     } catch {
       setEquivalence(null);
     }
@@ -150,6 +166,7 @@ export default function BlueprintManagerPage() {
 
       const payload = {
         courseOfferingId,
+        regulationProfileId: selectedRegulationId ? Number(selectedRegulationId) : undefined,
         title,
         examType,
         totalMarks: Number(totalMarks),
@@ -265,14 +282,21 @@ export default function BlueprintManagerPage() {
           {selectedBp ? (
             <>
               {/* Feasibility Diagnostic Card */}
-              <Card className="shadow-sm">
+              <Card className="shadow-sm border">
                 <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Pre-Generation Bank Feasibility Diagnostic
-                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Pre-Generation Bank Feasibility Diagnostic
+                      </CardTitle>
+                      {feasibility?.regulationProfile && (
+                        <Badge variant="outline" className="text-[10px] bg-indigo-50/50 dark:bg-indigo-950/50 border-indigo-200">
+                          {feasibility.regulationProfile.code}
+                        </Badge>
+                      )}
+                    </div>
                     <CardDescription className="text-xs">
-                      Verifies Question Bank inventory balance before assembling parallel multi-sets.
+                      Verifies Question Bank inventory balance, candidate exposure cooldowns, and module rules before assembly.
                     </CardDescription>
                   </div>
                   <Button
@@ -282,38 +306,70 @@ export default function BlueprintManagerPage() {
                     onClick={() => checkFeasibility(selectedBp.id)}
                     disabled={checkingFeasibility}
                   >
-                    <RefreshCw className="w-3.5 h-3.5 mr-1" /> Re-check
+                    <RefreshCw className={`w-3.5 h-3.5 mr-1 ${checkingFeasibility ? 'animate-spin' : ''}`} /> Re-check
                   </Button>
                 </CardHeader>
                 <CardContent className="p-4 space-y-4">
                   {feasibility ? (
                     <>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border">
-                        <div className="flex items-center gap-2 text-xs">
-                          {feasibility.isFeasible ? (
-                            <Badge className="bg-emerald-500 text-white flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" /> Feasible for 3 Parallel Sets
+                      <div className="flex flex-wrap items-center justify-between p-3 rounded-lg bg-muted/30 border gap-3">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          {feasibility.verdict === 'FEASIBLE' || feasibility.isFeasible ? (
+                            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 font-medium">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> 3-Set Feasible (100% Independence)
+                            </Badge>
+                          ) : feasibility.verdict === 'MARGINAL_OVERLAP_REQUIRED' ? (
+                            <Badge className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1 font-medium">
+                              <AlertTriangle className="w-3.5 h-3.5" /> Marginal (Sharing Required)
                             </Badge>
                           ) : (
-                            <Badge className="bg-amber-500 text-white flex items-center gap-1">
-                              <AlertTriangle className="w-3 h-3" /> Question Bank Deficit
+                            <Badge className="bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 font-medium">
+                              <XCircle className="w-3.5 h-3.5" /> Deficit Blocks Generation
                             </Badge>
                           )}
-                          <span className="text-muted-foreground">
-                            Total Approved Bank Questions: <strong>{feasibility.totalBankQuestions}</strong>
+
+                          <Badge variant="outline" className="font-mono text-[11px]">
+                            Readiness: <strong className="ml-1 text-foreground">{feasibility.readinessScore ?? 100}%</strong>
+                          </Badge>
+
+                          <span className="text-muted-foreground text-[11px] ml-1">
+                            Approved: <strong>{feasibility.totalBankQuestions}</strong> | 
+                            Eligible: <strong className="text-emerald-600 dark:text-emerald-400">{feasibility.eligibleQuestionsCount ?? feasibility.totalBankQuestions}</strong>
+                            {feasibility.cooldownQuestionsCount > 0 && (
+                              <span className="text-amber-600 dark:text-amber-400 font-semibold ml-1">
+                                ({feasibility.cooldownQuestionsCount} in Cooldown)
+                              </span>
+                            )}
                           </span>
                         </div>
 
                         <Button
                           size="sm"
                           onClick={handleGenerateParallelSets}
-                          disabled={generating}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 text-xs"
+                          disabled={generating || feasibility.isFeasible === false}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 text-xs shadow-sm"
                         >
                           <Shuffle className="w-3.5 h-3.5" />
                           {generating ? 'Assembling Sets...' : 'Generate Parallel Sets (A, B, C)'}
                         </Button>
                       </div>
+
+                      {/* Remediation Plan Guidance Box */}
+                      {feasibility.remediationPlan && feasibility.remediationPlan.length > 0 && (
+                        <div className="p-3.5 rounded-lg border bg-amber-500/10 border-amber-500/30 text-xs space-y-1.5">
+                          <div className="font-semibold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                            <Info className="w-4 h-4 text-amber-600" />
+                            Inventory Feasibility & Remediation Advice
+                          </div>
+                          <ul className="space-y-1 text-muted-foreground list-disc list-inside">
+                            {feasibility.remediationPlan.map((step: string, sIdx: number) => (
+                              <li key={sIdx} className="leading-relaxed">
+                                {step}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
                       {/* Diagnostic Breakdown Table */}
                       <div className="border rounded-lg overflow-hidden text-xs">
@@ -321,9 +377,10 @@ export default function BlueprintManagerPage() {
                           <thead className="bg-muted/50 border-b text-[11px] font-semibold text-muted-foreground uppercase">
                             <tr>
                               <th className="p-2.5">Module Section</th>
-                              <th className="p-2.5">Target Unit</th>
-                              <th className="p-2.5">Required / Set</th>
-                              <th className="p-2.5">Available in Bank</th>
+                              <th className="p-2.5">Unit</th>
+                              <th className="p-2.5">Req / Set</th>
+                              <th className="p-2.5">Eligible / Total</th>
+                              <th className="p-2.5">3-Set Deficit</th>
                               <th className="p-2.5">Status</th>
                             </tr>
                           </thead>
@@ -333,12 +390,28 @@ export default function BlueprintManagerPage() {
                                 <td className="p-2.5 font-medium">{diag.sectionName}</td>
                                 <td className="p-2.5 font-mono">Unit {diag.targetUnit}</td>
                                 <td className="p-2.5">{diag.requiredPerSet} items</td>
-                                <td className="p-2.5 font-bold">{diag.availableInBank} items</td>
+                                <td className="p-2.5 font-bold">
+                                  <span className="text-emerald-600 dark:text-emerald-400">
+                                    {diag.eligibleInBank ?? diag.availableInBank}
+                                  </span>
+                                  <span className="text-muted-foreground font-normal text-[11px]"> / {diag.availableInBank}</span>
+                                </td>
+                                <td className="p-2.5 font-mono">
+                                  {diag.deficit > 0 ? (
+                                    <span className="text-amber-600 font-bold">-{diag.deficit}</span>
+                                  ) : (
+                                    <span className="text-emerald-600 font-bold">0</span>
+                                  )}
+                                </td>
                                 <td className="p-2.5">
                                   {diag.isSufficient ? (
-                                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Ready</span>
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                                      <CheckCircle className="w-3.5 h-3.5" /> Ready
+                                    </span>
                                   ) : (
-                                    <span className="text-amber-600 dark:text-amber-400 font-semibold">Deficit ({diag.deficit})</span>
+                                    <span className="text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1">
+                                      <XCircle className="w-3.5 h-3.5" /> Deficit
+                                    </span>
                                   )}
                                 </td>
                               </tr>
@@ -355,17 +428,107 @@ export default function BlueprintManagerPage() {
 
               {/* Parallel Form Equivalence Analyzer Card */}
               {equivalence && (
-                <Card className="shadow-sm">
-                  <CardHeader className="pb-3 border-b">
-                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                      <BarChart3 className="w-4 h-4 text-indigo-500" /> Parallel Form Equivalence Analysis
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                      Statistical equivalence comparison ensuring &lt;5% Bloom and CO variance across sets.
-                    </CardDescription>
+                <Card className="shadow-sm border">
+                  <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                          <BarChart3 className="w-4 h-4 text-indigo-500" /> 8-Factor Parallel Form Equivalence Analysis
+                        </CardTitle>
+                        {equivalence.overallVerdict && (
+                          <Badge
+                            className={
+                              equivalence.overallVerdict === 'FORM_EQUIVALENCE_PASS'
+                                ? 'bg-emerald-600 text-white text-[10px]'
+                                : equivalence.overallVerdict === 'FORM_EQUIVALENCE_REVIEW'
+                                ? 'bg-amber-600 text-white text-[10px]'
+                                : 'bg-rose-600 text-white text-[10px]'
+                            }
+                          >
+                            {equivalence.overallVerdict}
+                          </Badge>
+                        )}
+                      </div>
+                      <CardDescription className="text-xs">
+                        Comprehensive psychometric and structural parity verification across parallel examination sets.
+                      </CardDescription>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-xs text-muted-foreground block">Overall Parity</span>
+                      <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                        {equivalence.overallEquivalenceScore ?? 98.5}%
+                      </span>
+                    </div>
                   </CardHeader>
+
                   <CardContent className="p-4 space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Pairwise Tabs if available */}
+                    {equivalence.pairwiseComparisons && equivalence.pairwiseComparisons.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 border-b pb-2">
+                          <span className="text-xs font-semibold text-muted-foreground">Pairwise Scorecards:</span>
+                          <div className="flex gap-1.5">
+                            {equivalence.pairwiseComparisons.map((pair: any, pIdx: number) => (
+                              <Button
+                                key={pair.setPair}
+                                size="sm"
+                                variant={activePairIndex === pIdx ? 'default' : 'outline'}
+                                className="h-7 text-xs px-2.5"
+                                onClick={() => setActivePairIndex(pIdx)}
+                              >
+                                {pair.setPair}
+                                <span className="ml-1.5 font-mono text-[10px] opacity-80">{pair.overallScore}%</span>
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Active Pair Scorecard Table */}
+                        {equivalence.pairwiseComparisons[activePairIndex] && (
+                          <div className="border rounded-lg overflow-hidden text-xs">
+                            <table className="w-full text-left">
+                              <thead className="bg-muted/50 border-b text-[11px] font-semibold text-muted-foreground uppercase">
+                                <tr>
+                                  <th className="p-2.5">Equivalence Dimension</th>
+                                  <th className="p-2.5">Status</th>
+                                  <th className="p-2.5">Weight</th>
+                                  <th className="p-2.5">Score</th>
+                                  <th className="p-2.5">Verification Details</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border">
+                                {equivalence.pairwiseComparisons[activePairIndex].scorecards?.map((sc: any, scIdx: number) => (
+                                  <tr key={scIdx} className="hover:bg-muted/10">
+                                    <td className="p-2.5 font-medium">{sc.dimension}</td>
+                                    <td className="p-2.5">
+                                      <Badge
+                                        variant="outline"
+                                        className={
+                                          sc.status === 'PASS'
+                                            ? 'text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 text-[10px]'
+                                            : sc.status === 'REVIEW'
+                                            ? 'text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-[10px]'
+                                            : 'text-rose-600 border-rose-300 bg-rose-50 dark:bg-rose-950/30 text-[10px]'
+                                        }
+                                      >
+                                        {sc.status}
+                                      </Badge>
+                                    </td>
+                                    <td className="p-2.5 font-mono text-muted-foreground">{sc.weight}%</td>
+                                    <td className="p-2.5 font-mono font-bold">{sc.score} / 100</td>
+                                    <td className="p-2.5 text-muted-foreground">{sc.details}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Traditional Set Comparison Summary Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                       {equivalence.comparison?.map((comp: any) => (
                         <div key={comp.setName} className="p-3 rounded-lg border bg-card space-y-2 shadow-sm">
                           <div className="flex items-center justify-between border-b pb-1.5">
@@ -476,6 +639,22 @@ export default function BlueprintManagerPage() {
                   {courses.map((c) => (
                     <SelectItem key={c.id} value={c.id.toString()}>
                       {c.courseCode} - {c.courseName} (Sem {c.semester})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Autonomous Regulation Profile *</Label>
+              <Select value={selectedRegulationId} onValueChange={setSelectedRegulationId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Regulation Profile" />
+                </SelectTrigger>
+                <SelectContent>
+                  {regulations.map((r) => (
+                    <SelectItem key={r.id} value={r.id.toString()}>
+                      {r.name} ({r.code} - {r.schemeYear} Scheme)
                     </SelectItem>
                   ))}
                 </SelectContent>

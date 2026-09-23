@@ -5,6 +5,8 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
 import { decryptPayload } from "../utils/cryptoVault.js";
+import { evaluateParallelFormEquivalence } from "../services/formEquivalence.service.js";
+import { evaluateItemExposure, DEFAULT_EXPOSURE_POLICY } from "../services/exposurePolicy.service.js";
 
 export const blueprintRouter = Router();
 blueprintRouter.use(requireAuth);
@@ -29,6 +31,7 @@ const sectionSchema = z.object({
 
 const createBlueprintSchema = z.object({
   courseOfferingId: z.number().int().positive(),
+  regulationProfileId: z.number().int().positive().optional(),
   title: z.string().min(3),
   examType: z.string().min(1), // e.g. "SEE", "1IA"
   totalMarks: z.number().int().positive().default(100),
@@ -51,6 +54,9 @@ blueprintRouter.get("/", async (req, res) => {
       courseOffering: {
         include: { course: true, department: true }
       },
+      regulationProfile: {
+        include: { rules: true }
+      },
       sections: {
         include: { rules: true },
         orderBy: { orderIndex: "asc" }
@@ -67,12 +73,13 @@ blueprintRouter.get("/", async (req, res) => {
 
 // Create blueprint
 blueprintRouter.post("/", requireRole(Role.controller, Role.hod), validateBody(createBlueprintSchema), async (req, res) => {
-  const { courseOfferingId, title, examType, totalMarks, durationMinutes, instructions, sections } = req.body;
+  const { courseOfferingId, regulationProfileId, title, examType, totalMarks, durationMinutes, instructions, sections } = req.body;
 
   const blueprint = await prisma.$transaction(async (tx) => {
     const bp = await tx.assessmentBlueprint.create({
       data: {
         courseOfferingId,
+        regulationProfileId: regulationProfileId || null,
         title,
         examType,
         totalMarks,
@@ -122,6 +129,9 @@ blueprintRouter.get("/:id", async (req, res) => {
       courseOffering: {
         include: { course: { include: { courseOutcomes: true } } }
       },
+      regulationProfile: {
+        include: { rules: true }
+      },
       sections: {
         include: { rules: true },
         orderBy: { orderIndex: "asc" }
@@ -144,13 +154,19 @@ blueprintRouter.get("/:id", async (req, res) => {
 
 // ─── 2. Feasibility Diagnostic Checker ────────────────────
 
-blueprintRouter.post("/:id/feasibility", async (req, res) => {
+async function handleFeasibilityDiagnostic(req: any, res: any) {
   const id = parseInt(req.params.id, 10);
   const blueprint = await prisma.assessmentBlueprint.findUnique({
     where: { id },
     include: {
       courseOffering: true,
-      sections: { include: { rules: true } }
+      regulationProfile: {
+        include: { rules: true }
+      },
+      sections: {
+        include: { rules: true },
+        orderBy: { orderIndex: "asc" }
+      }
     }
   });
 
@@ -160,13 +176,15 @@ blueprintRouter.post("/:id/feasibility", async (req, res) => {
 
   const courseId = blueprint.courseOffering.courseId;
 
-  // Fetch approved questions for course
+  // Fetch approved questions for course with usages and psychometrics
   const approvedQuestions = await prisma.question.findMany({
     where: {
       courseId,
       status: { in: [QuestionStatus.APPROVED, QuestionStatus.DRAFT, QuestionStatus.SUBMITTED, QuestionStatus.PENDING_REVIEW] }
     },
     include: {
+      usages: true,
+      psychometrics: true,
       versions: {
         orderBy: { versionNumber: "desc" },
         take: 1,
@@ -175,29 +193,96 @@ blueprintRouter.post("/:id/feasibility", async (req, res) => {
     }
   });
 
-  // Calculate availability per Unit
+  // Evaluate candidate question exposure against reuse limits
+  const candidatePayloads = approvedQuestions.map((q) => {
+    const usages = q.usages || [];
+    return {
+      questionId: q.id,
+      questionCode: q.code,
+      status: q.status,
+      timesUsed: usages.length,
+      recentExamUses: usages.filter((u: any) => u.academicYear >= "2023-24").length,
+      sessionsSinceLastUse: usages.length > 0 ? 1 : null,
+      healthStatus: q.healthStatus
+    };
+  });
+
+  const exposureResults = evaluateItemExposure(candidatePayloads, DEFAULT_EXPOSURE_POLICY);
+  const exposureMap = new Map(exposureResults.map((r) => [r.questionId, r]));
+
+  // Availability breakdown
   const availableByUnit: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const eligibleByUnit: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const bloomsByUnit: Record<number, Record<string, number>> = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {} };
+  const difficultyByUnit: Record<number, { easy: number; moderate: number; hard: number }> = {
+    1: { easy: 0, moderate: 0, hard: 0 },
+    2: { easy: 0, moderate: 0, hard: 0 },
+    3: { easy: 0, moderate: 0, hard: 0 },
+    4: { easy: 0, moderate: 0, hard: 0 },
+    5: { easy: 0, moderate: 0, hard: 0 },
+  };
+
+  let totalEligible = 0;
+  let totalCooldown = 0;
+
   for (const q of approvedQuestions) {
-    if (availableByUnit[q.unitNumber] !== undefined) {
-      availableByUnit[q.unitNumber]++;
+    const unit = q.unitNumber;
+    if (availableByUnit[unit] !== undefined) {
+      availableByUnit[unit]++;
+    }
+
+    const exp = exposureMap.get(q.id);
+    const isEligible = exp?.eligible !== false;
+    if (isEligible) {
+      if (eligibleByUnit[unit] !== undefined) eligibleByUnit[unit]++;
+      totalEligible++;
+    } else {
+      totalCooldown++;
+    }
+
+    // Blooms breakdown from latest parts
+    const latestVersion = q.versions[0];
+    if (latestVersion?.parts && bloomsByUnit[unit]) {
+      for (const part of latestVersion.parts) {
+        bloomsByUnit[unit][part.bloomsLevel] = (bloomsByUnit[unit][part.bloomsLevel] || 0) + 1;
+      }
+    }
+
+    // Psychometric difficulty tier
+    const p = q.psychometrics?.facilityIndex ?? 0.55;
+    if (difficultyByUnit[unit]) {
+      if (p < 0.40) difficultyByUnit[unit].hard++;
+      else if (p > 0.70) difficultyByUnit[unit].easy++;
+      else difficultyByUnit[unit].moderate++;
     }
   }
 
-  // Calculate required questions for 3 Parallel Sets (Set A, Set B, Set C)
-  // For each module section with 2 questions (Q1 OR Q2), 3 sets require up to 6 candidate questions if non-overlapping
   const diagnosticResults: any[] = [];
+  const remediationPlan: string[] = [];
   let isFeasible = true;
+  let hasDeficitForSingleSet = false;
+  let hasDeficitForParallelSets = false;
 
   for (const sec of blueprint.sections) {
     for (const rule of sec.rules) {
       const unit = rule.targetUnit;
       const questionsPerSet = rule.requiredCount || 2;
-      const totalRequiredForParallelSets = questionsPerSet * 3; // 3 sets
+      const totalRequiredForParallelSets = questionsPerSet * 3; // 3 sets (Sets A, B, Reserve)
       const available = availableByUnit[unit] || 0;
-      const deficit = Math.max(0, totalRequiredForParallelSets - available);
+      const eligible = eligibleByUnit[unit] || 0;
+      const deficit = Math.max(0, totalRequiredForParallelSets - eligible);
 
-      if (available < questionsPerSet) {
+      if (eligible < questionsPerSet) {
         isFeasible = false;
+        hasDeficitForSingleSet = true;
+        remediationPlan.push(
+          `CRITICAL - Unit ${unit}: Only ${eligible} eligible question(s) available (minimum ${questionsPerSet} required for single set). Author at least ${questionsPerSet - eligible} additional question(s) immediately.`
+        );
+      } else if (eligible < totalRequiredForParallelSets) {
+        hasDeficitForParallelSets = true;
+        remediationPlan.push(
+          `NOTICE - Unit ${unit}: ${eligible} eligible question(s) available. Complete 3-set parallel independence requires ${totalRequiredForParallelSets} non-overlapping items (deficit: ${deficit}). Author ${deficit} more question(s) to avoid cross-form reuse.`
+        );
       }
 
       diagnosticResults.push({
@@ -206,19 +291,56 @@ blueprintRouter.post("/:id/feasibility", async (req, res) => {
         requiredPerSet: questionsPerSet,
         requiredForThreeParallelSets: totalRequiredForParallelSets,
         availableInBank: available,
+        eligibleInBank: eligible,
         deficit,
-        isSufficient: available >= questionsPerSet
+        isSufficient: eligible >= questionsPerSet,
+        bloomsDistribution: bloomsByUnit[unit] || {},
+        difficultyDistribution: difficultyByUnit[unit] || { easy: 0, moderate: 0, hard: 0 }
       });
+    }
+  }
+
+  // Determine overall readiness verdict
+  let verdict: "FEASIBLE" | "MARGINAL_OVERLAP_REQUIRED" | "INFEASIBLE";
+  let readinessScore: number;
+
+  if (hasDeficitForSingleSet) {
+    verdict = "INFEASIBLE";
+    readinessScore = Math.max(10, Math.round((totalEligible / Math.max(1, blueprint.sections.length * 2)) * 40));
+  } else if (hasDeficitForParallelSets) {
+    verdict = "MARGINAL_OVERLAP_REQUIRED";
+    const totalRequiredAllSets = blueprint.sections.length * 2 * 3;
+    readinessScore = Math.min(89, Math.max(60, Math.round((totalEligible / Math.max(1, totalRequiredAllSets)) * 100)));
+  } else {
+    verdict = "FEASIBLE";
+    readinessScore = 100;
+    if (remediationPlan.length === 0) {
+      remediationPlan.push("All units satisfy 3-set parallel non-overlapping inventory requirements. Ready for multi-set generation.");
     }
   }
 
   res.json({
     success: true,
     isFeasible,
+    verdict,
+    readinessScore,
     totalBankQuestions: approvedQuestions.length,
-    diagnosticResults
+    eligibleQuestionsCount: totalEligible,
+    cooldownQuestionsCount: totalCooldown,
+    diagnosticResults,
+    remediationPlan,
+    regulationProfile: blueprint.regulationProfile ? {
+      id: blueprint.regulationProfile.id,
+      code: blueprint.regulationProfile.code,
+      name: blueprint.regulationProfile.name,
+      schemeYear: blueprint.regulationProfile.schemeYear,
+      rulesCount: blueprint.regulationProfile.rules.length
+    } : null
   });
-});
+}
+
+blueprintRouter.post("/:id/feasibility", handleFeasibilityDiagnostic);
+blueprintRouter.get("/:id/bank-diagnostic", handleFeasibilityDiagnostic);
 
 // ─── 3. Parallel Multi-Set Generator (Sets A, B, C) ───────
 
@@ -420,13 +542,26 @@ blueprintRouter.get("/forms/:formId", async (req, res) => {
   res.json({ success: true, form });
 });
 
-// Parallel Form Equivalence Analysis
+// Parallel Form Equivalence Analysis (8-Factor Comprehensive Verification)
 blueprintRouter.get("/:id/equivalence", async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const forms = await prisma.paperForm.findMany({
     where: { blueprintId: id },
     include: {
-      snapshots: true
+      snapshots: {
+        include: {
+          questionVersion: {
+            include: {
+              question: {
+                include: {
+                  psychometrics: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: { orderIndex: "asc" }
+      }
     }
   });
 
@@ -434,6 +569,7 @@ blueprintRouter.get("/:id/equivalence", async (req, res) => {
     return res.status(404).json({ error: "No generated forms found for this blueprint" });
   }
 
+  // Legacy comparison structure for backward compatibility
   const comparison = forms.map((f) => {
     const totalMarks = f.snapshots.reduce((acc, s) => acc + s.frozenMarks, 0);
     const bloomsCount: Record<string, number> = {};
@@ -457,10 +593,35 @@ blueprintRouter.get("/:id/equivalence", async (req, res) => {
     };
   });
 
+  // Comprehensive 8-Dimension Equivalence Evaluation
+  const formReps = forms.map((f) => ({
+    setName: f.setName,
+    snapshots: f.snapshots.map((s) => ({
+      questionNumber: s.questionNumber,
+      moduleNumber: s.moduleNumber,
+      isAlternative: s.isAlternative,
+      frozenMarks: s.frozenMarks,
+      frozenBlooms: s.frozenBlooms,
+      frozenCoCode: s.frozenCoCode,
+      questionVersionId: s.questionVersionId,
+      difficultyIndex: s.questionVersion?.question?.psychometrics?.facilityIndex ?? 0.55
+    })),
+    bloomVariance: f.bloomVariance,
+    coVariance: f.coVariance,
+    equivalenceScore: f.equivalenceScore
+  }));
+
+  const analysis = evaluateParallelFormEquivalence(id, formReps);
+
   res.json({
     success: true,
     blueprintId: id,
     formsCount: forms.length,
-    comparison
+    comparison,
+    overallVerdict: analysis.overallVerdict,
+    overallEquivalenceScore: analysis.overallEquivalenceScore,
+    pairwiseComparisons: analysis.pairwiseComparisons,
+    formsSummary: analysis.formsSummary,
+    explanation: analysis.explanation
   });
 });

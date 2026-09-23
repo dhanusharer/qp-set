@@ -492,20 +492,23 @@ model QuestionReview {
 // ─── Assessment Blueprint ────────────────────────────────
 
 model AssessmentBlueprint {
-  id               Int                @id @default(autoincrement())
-  courseOfferingId Int
-  courseOffering   CourseOffering     @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  title            String             // e.g. "SEE Blueprint: 22CS61 Cloud Computing"
-  examType         String             // e.g. "SEE", "1IA", "2IA"
-  totalMarks       Int                // e.g. 100
-  durationMinutes  Int                // e.g. 180
-  instructions     String?
-  sections         BlueprintSection[]
-  paperForms       PaperForm[]
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                  Int                @id @default(autoincrement())
+  courseOfferingId    Int
+  courseOffering      CourseOffering     @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  regulationProfileId Int?
+  regulationProfile   RegulationProfile? @relation(fields: [regulationProfileId], references: [id], onDelete: SetNull)
+  title               String             // e.g. "SEE Blueprint: 22CS61 Cloud Computing"
+  examType            String             // e.g. "SEE", "1IA", "2IA"
+  totalMarks          Int                // e.g. 100
+  durationMinutes     Int                // e.g. 180
+  instructions        String?
+  sections            BlueprintSection[]
+  paperForms          PaperForm[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   @@index([courseOfferingId])
+  @@index([regulationProfileId])
 }
 
 // ─── Blueprint Section (e.g. Module 1, Part A) ────────────
@@ -675,6 +678,43 @@ model QuestionExposurePolicy {
   isDefault             Boolean  @default(false)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+}
+
+// ─── Regulation-as-Data Engine ────────────────────────────
+
+model RegulationProfile {
+  id                  Int                   @id @default(autoincrement())
+  code                String                @unique // e.g. "VTU_ENGG_2022"
+  name                String                // e.g. "VTU Autonomous Engineering Regulations (2022 Scheme)"
+  academicYear        String                // e.g. "2022"
+  programme           String                @default("B.Tech / B.E.")
+  cieWeight           Float                 @default(0.5)
+  seeWeight           Float                 @default(0.5)
+  numModules          Int                   @default(5)
+  marksPerModule      Int                   @default(20)
+  totalMarks          Int                   @default(100)
+  scaledTotalMarks    Int                   @default(100)
+  minSeePassPercent   Float                 @default(35.0)
+  minTotalPassPercent Float                 @default(40.0)
+  rulesJson           Json?                 // Dynamic config for choice, step-marking and grading rules
+  isActive            Boolean               @default(true)
+  blueprints          AssessmentBlueprint[]
+  rules               RegulationRule[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+}
+
+model RegulationRule {
+  id                  Int               @id @default(autoincrement())
+  regulationProfileId Int
+  regulationProfile   RegulationProfile @relation(fields: [regulationProfileId], references: [id], onDelete: Cascade)
+  category            String            // "ASSESSMENT", "PAPER", "GRADING", "PASSING", "OBE"
+  ruleCode            String            // e.g. "MODULE_CHOICE_MANDATORY"
+  description         String
+  ruleValue           Json              // Parameter object e.g. { compulsory: 1, optional: 1 }
+  createdAt           DateTime          @default(now())
+
+  @@index([regulationProfileId])
 }
 
 
