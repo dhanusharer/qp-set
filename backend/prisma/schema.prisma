@@ -166,6 +166,8 @@ model Course {
   offerings        CourseOffering[]
   courseOutcomes   CourseOutcome[]
   questions        Question[]
+  curriculumCourses CurriculumCourse[]
+  assessmentEvents AssessmentEvent[]
 
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
@@ -351,33 +353,42 @@ model Department {
   id              Int              @id @default(autoincrement())
   code            String           @unique
   name            String
+  institutionId   Int?
+  institution     Institution?     @relation(fields: [institutionId], references: [id], onDelete: SetNull)
   hodId           Int?
   hod             User?            @relation("DeptHod", fields: [hodId], references: [id], onDelete: SetNull)
   courses         Course[]
   users           User[]           @relation("DeptUsers")
   courseOfferings CourseOffering[]
+  programs        Program[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+
+  @@index([institutionId])
 }
 
 // ─── Course Offering ─────────────────────────────────────
 
 model CourseOffering {
-  id           Int         @id @default(autoincrement())
-  courseId     Int
-  course       Course      @relation(fields: [courseId], references: [id], onDelete: Restrict)
-  academicYear String      // e.g. "2025-2026"
-  semester     String      // e.g. "6"
-  schemeYear   String      // e.g. "2022"
-  departmentId Int?
-  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  blueprints   AssessmentBlueprint[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id               Int                   @id @default(autoincrement())
+  courseId         Int
+  course           Course                @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  academicYear     String                // e.g. "2025-2026"
+  semester         String                // e.g. "6"
+  schemeYear       String                // e.g. "2022"
+  academicTermId   Int?
+  academicTerm     AcademicTerm?         @relation(fields: [academicTermId], references: [id], onDelete: SetNull)
+  departmentId     Int?
+  department       Department?           @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  blueprints       AssessmentBlueprint[]
+  assessmentEvents AssessmentEvent[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 
   @@unique([courseId, academicYear, semester, schemeYear])
   @@index([courseId])
   @@index([departmentId])
+  @@index([academicTermId])
 }
 
 // ─── Course Outcome (CO) ─────────────────────────────────
@@ -440,6 +451,7 @@ model QuestionVersion {
   authTag           String?             // 128-bit GCM auth tag
   parts             QuestionPart[]
   snapshots         PaperItemSnapshot[]
+  usages            QuestionUsage[]
   createdById       Int
   createdBy         User                @relation("QuestionVersionAuthor", fields: [createdById], references: [id], onDelete: Restrict)
   changeLog         String?
@@ -493,8 +505,10 @@ model QuestionReview {
 
 model AssessmentBlueprint {
   id                  Int                @id @default(autoincrement())
-  courseOfferingId    Int
-  courseOffering      CourseOffering     @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  courseOfferingId    Int?
+  courseOffering      CourseOffering?    @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  assessmentEventId   Int?
+  assessmentEvent     AssessmentEvent?   @relation(fields: [assessmentEventId], references: [id], onDelete: Cascade)
   regulationProfileId Int?
   regulationProfile   RegulationProfile? @relation(fields: [regulationProfileId], references: [id], onDelete: SetNull)
   title               String             // e.g. "SEE Blueprint: 22CS61 Cloud Computing"
@@ -508,6 +522,7 @@ model AssessmentBlueprint {
   updatedAt           DateTime           @updatedAt
 
   @@index([courseOfferingId])
+  @@index([assessmentEventId])
   @@index([regulationProfileId])
 }
 
@@ -544,22 +559,26 @@ model BlueprintRule {
 // ─── Parallel Paper Form (Set A, Set B, Reserve) ──────────
 
 model PaperForm {
-  id               Int                 @id @default(autoincrement())
-  blueprintId      Int
-  blueprint        AssessmentBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
-  setName          String              // e.g. "Set A", "Set B", "Set C (Reserve)"
-  status           String              @default("GENERATED") // "GENERATED", "UNDER_SCRUTINY", "APPROVED", "SEALED"
-  snapshots        PaperItemSnapshot[]
-  reviews          PaperScrutinyReview[]
-  questionUsages   QuestionUsage[]
-  equivalenceScore Float?              // e.g. 98.5% equivalence
-  bloomVariance    Float?              // e.g. 2.1%
-  coVariance       Float?              // e.g. 1.8%
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id                Int                 @id @default(autoincrement())
+  blueprintId       Int
+  blueprint         AssessmentBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  assessmentEventId Int?
+  assessmentEvent   AssessmentEvent?    @relation(fields: [assessmentEventId], references: [id], onDelete: Cascade)
+  setName           String              // e.g. "Set A", "Set B", "Set C (Reserve)"
+  status            String              @default("GENERATED") // "GENERATED", "UNDER_SCRUTINY", "APPROVED", "SEALED"
+  snapshots         PaperItemSnapshot[]
+  reviews           PaperScrutinyReview[]
+  questionUsages    QuestionUsage[]
+  versions          PaperVersion[]
+  equivalenceScore  Float?              // e.g. 98.5% equivalence
+  bloomVariance     Float?              // e.g. 2.1%
+  coVariance        Float?              // e.g. 1.8%
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   @@unique([blueprintId, setName])
   @@index([blueprintId])
+  @@index([assessmentEventId])
 }
 
 // ─── Immutable Paper Item Snapshot ───────────────────────
@@ -568,6 +587,8 @@ model PaperItemSnapshot {
   id                Int             @id @default(autoincrement())
   paperFormId       Int
   paperForm         PaperForm       @relation(fields: [paperFormId], references: [id], onDelete: Cascade)
+  paperVersionId    Int?
+  paperVersion      PaperVersion?   @relation(fields: [paperVersionId], references: [id], onDelete: Cascade)
   questionVersionId Int
   questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
   questionNumber    String          // e.g. "Q1(a)", "Q1(b)", "Q2"
@@ -582,6 +603,7 @@ model PaperItemSnapshot {
   createdAt         DateTime        @default(now())
 
   @@index([paperFormId])
+  @@index([paperVersionId])
   @@index([questionVersionId])
 }
 
@@ -606,17 +628,26 @@ model PaperScrutinyReview {
 // ─── Question Usage Tracking ──────────────────────────────
 
 model QuestionUsage {
-  id             Int         @id @default(autoincrement())
-  questionId     Int
-  question       Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  paperFormId    Int?
-  paperForm      PaperForm?  @relation(fields: [paperFormId], references: [id], onDelete: SetNull)
-  academicYear   String      // e.g. "2025-2026"
-  semester       String      // e.g. "6"
-  assessmentType String      // e.g. "SEE", "1IA", "2IA"
-  usedAt         DateTime    @default(now())
+  id                Int              @id @default(autoincrement())
+  questionId        Int
+  question          Question         @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionVersionId Int?
+  questionVersion   QuestionVersion? @relation(fields: [questionVersionId], references: [id], onDelete: SetNull)
+  paperFormId       Int?
+  paperForm         PaperForm?       @relation(fields: [paperFormId], references: [id], onDelete: SetNull)
+  paperVersionId    Int?
+  paperVersion      PaperVersion?    @relation(fields: [paperVersionId], references: [id], onDelete: SetNull)
+  assessmentEventId Int?
+  assessmentEvent   AssessmentEvent? @relation(fields: [assessmentEventId], references: [id], onDelete: SetNull)
+  academicYear      String           // e.g. "2025-2026"
+  semester          String           // e.g. "6"
+  assessmentType    String           // e.g. "SEE", "1IA", "2IA"
+  usedAt            DateTime         @default(now())
 
   @@index([questionId])
+  @@index([questionVersionId])
+  @@index([paperVersionId])
+  @@index([assessmentEventId])
   @@index([academicYear, semester])
   @@index([paperFormId])
 }
@@ -700,6 +731,8 @@ model RegulationProfile {
   isActive            Boolean               @default(true)
   blueprints          AssessmentBlueprint[]
   rules               RegulationRule[]
+  examSessions        ExamSession[]
+  blueprintTemplates  BlueprintTemplate[]
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 }
@@ -716,5 +749,326 @@ model RegulationRule {
 
   @@index([regulationProfileId])
 }
+
+// ─── Institution Master ──────────────────────────────────
+
+model Institution {
+  id            Int            @id @default(autoincrement())
+  code          String         @unique // e.g. "AMCEC"
+  name          String         // e.g. "AMC Engineering College (Autonomous)"
+  city          String?        @default("Bengaluru")
+  state         String?        @default("Karnataka")
+  isAutonomous  Boolean        @default(true)
+  departments   Department[]
+  academicYears AcademicYear[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ─── Academic Program ────────────────────────────────────
+
+model Program {
+  id                 Int                 @id @default(autoincrement())
+  departmentId       Int
+  department         Department          @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  code               String              @unique // e.g. "BE_CSE"
+  name               String              // e.g. "B.E. in Computer Science & Engineering"
+  degreeType         String              @default("UNDERGRADUATE")
+  curriculumVersions CurriculumVersion[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([departmentId])
+}
+
+// ─── Academic Year (Time Container) ──────────────────────
+
+model AcademicYear {
+  id            Int            @id @default(autoincrement())
+  institutionId Int?
+  institution   Institution?   @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  yearCode      String         @unique // e.g. "2024-25", "2025-26", "2026-27"
+  startDate     DateTime
+  endDate       DateTime
+  isCurrent     Boolean        @default(false)
+  terms         AcademicTerm[]
+  examSessions  ExamSession[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ─── Academic Term (Teaching Organization) ───────────────
+
+model AcademicTerm {
+  id              Int              @id @default(autoincrement())
+  academicYearId  Int
+  academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  termCode        String           // e.g. "ODD_2026", "EVEN_2026", "SUMMER_2027"
+  termType        String           // "ODD", "EVEN", "SUMMER"
+  displayName     String           // e.g. "Odd Semester 2026-27"
+  startDate       DateTime
+  endDate         DateTime
+  isCurrent       Boolean          @default(false)
+  courseOfferings CourseOffering[]
+  examSessions    ExamSession[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([academicYearId, termCode])
+  @@index([academicYearId])
+}
+
+// ─── Assessment Type (Configurable Master) ───────────────
+
+model AssessmentType {
+  id               Int               @id @default(autoincrement())
+  code             String            @unique // e.g. "CIE_1", "CIE_2", "CIE_3", "SEE", "MAKEUP", "SUPPLEMENTARY", "SPECIAL"
+  displayName      String            // e.g. "Semester End Examination", "Summer Make-up Examination"
+  category         String            @default("SUMMATIVE") // "FORMATIVE", "SUMMATIVE", "REMEDIAL"
+  defaultWeight    Float             @default(50.0)
+  isTerminal       Boolean           @default(false)
+  examSessions     ExamSession[]
+  assessmentEvents AssessmentEvent[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+// ─── Curriculum Version (Academic Scheme) ────────────────
+
+model CurriculumVersion {
+  id                Int                @id @default(autoincrement())
+  programId         Int?
+  program           Program?           @relation(fields: [programId], references: [id], onDelete: SetNull)
+  code              String             @unique // e.g. "VTU_2022_SCHEME", "AMCEC_2024_AUTONOMOUS"
+  name              String             // e.g. "VTU Autonomous Engineering 2022 CBCS Scheme"
+  schemeYear        String             // e.g. "2022"
+  effectiveFromYear String             // e.g. "2022-23"
+  effectiveToYear   String?
+  isActive          Boolean            @default(true)
+  courses           CurriculumCourse[]
+  assessmentEvents  AssessmentEvent[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([programId])
+}
+
+// ─── Curriculum Course Mapping ───────────────────────────
+
+model CurriculumCourse {
+  id                  Int               @id @default(autoincrement())
+  curriculumVersionId Int
+  curriculumVersion   CurriculumVersion @relation(fields: [curriculumVersionId], references: [id], onDelete: Cascade)
+  courseId            Int
+  course              Course            @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  semester            String            // e.g. "3", "4", "5", "6"
+  credits             Int               @default(4)
+  isElective          Boolean           @default(false)
+  electiveGroup       String?
+  createdAt           DateTime          @default(now())
+
+  @@unique([curriculumVersionId, courseId])
+  @@index([curriculumVersionId])
+  @@index([courseId])
+}
+
+// ─── Examination Session (Operational Window) ────────────
+
+model ExamSession {
+  id                  Int                @id @default(autoincrement())
+  academicYearId      Int
+  academicYear        AcademicYear       @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  academicTermId      Int?
+  academicTerm        AcademicTerm?      @relation(fields: [academicTermId], references: [id], onDelete: SetNull)
+  assessmentTypeId    Int
+  assessmentType      AssessmentType     @relation(fields: [assessmentTypeId], references: [id], onDelete: Restrict)
+  name                String             // e.g. "SEE December 2026", "Summer Makeup August 2027"
+  sessionCode         String             @unique // e.g. "SEE_DEC_2026", "MAKEUP_AUG_2027"
+  startsAt            DateTime
+  endsAt              DateTime
+  status              String             @default("PLANNING") // "PLANNING", "ACTIVE", "SCRUTINY", "SEALED", "CONCLUDED"
+  regulationProfileId Int?
+  regulationProfile   RegulationProfile? @relation(fields: [regulationProfileId], references: [id], onDelete: SetNull)
+  assessmentEvents    AssessmentEvent[]
+  createdBy           Int?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([academicYearId])
+  @@index([assessmentTypeId])
+  @@index([status])
+  @@index([startsAt])
+}
+
+// ─── Assessment Event (Course Examination Instance) ──────
+
+model AssessmentEvent {
+  id                  Int                      @id @default(autoincrement())
+  examSessionId       Int
+  examSession         ExamSession              @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
+  courseId            Int
+  course              Course                   @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  curriculumVersionId Int?
+  curriculumVersion   CurriculumVersion?       @relation(fields: [curriculumVersionId], references: [id], onDelete: SetNull)
+  courseOfferingId    Int?                     // Nullable! (allows makeup testing multiple cohorts)
+  courseOffering      CourseOffering?          @relation(fields: [courseOfferingId], references: [id], onDelete: SetNull)
+  assessmentTypeId    Int?
+  assessmentType      AssessmentType?          @relation(fields: [assessmentTypeId], references: [id], onDelete: SetNull)
+  paperTemplateId     Int?
+  paperTemplate       PaperTemplate?           @relation(fields: [paperTemplateId], references: [id], onDelete: SetNull)
+  eventCode           String                   @unique // e.g. "SEE_2026_21CS32", "MKUP_2027_BCS303"
+  title               String                   // e.g. "Data Structures SEE — December 2026"
+  status              String                   @default("DRAFT") // "DRAFT", "BLUEPRINT_READY", "PAPERS_GENERATED", "SCRUTINY", "APPROVED", "SEALED", "RELEASED"
+  scheduledAt         DateTime?
+  maximumMarks        Int                      @default(100)
+  durationMinutes     Int                      @default(180)
+  blueprints          AssessmentBlueprint[]
+  paperForms          PaperForm[]
+  candidates          AssessmentRegistration[]
+  questionUsages      QuestionUsage[]
+  results             AssessmentResult[]
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@index([examSessionId])
+  @@index([courseId])
+  @@index([curriculumVersionId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+// ─── Assessment Registration (Candidate Cohort Roster) ───
+
+model AssessmentRegistration {
+  id                Int             @id @default(autoincrement())
+  assessmentEventId Int
+  assessmentEvent   AssessmentEvent @relation(fields: [assessmentEventId], references: [id], onDelete: Cascade)
+  usn               String          // e.g. "1AM22CS001"
+  studentName       String
+  candidateType     String          @default("REGULAR") // "REGULAR", "BACKLOG", "MAKEUP", "GRADE_IMPROVEMENT"
+  sourceCohortYear  String?         // e.g. "2022-23"
+  sourceSemester    String?         // e.g. "3"
+  cieMarks          Float?
+  attendancePercent Float?          @default(85.0)
+  isEligible        Boolean         @default(true)
+  seatNumber        String?
+  hallTicketNumber  String?
+  createdAt         DateTime        @default(now())
+
+  @@unique([assessmentEventId, usn])
+  @@index([assessmentEventId])
+  @@index([usn])
+  @@index([candidateType])
+}
+
+// ─── Paper Template (Visual Structure & Confidential Layout)
+
+model PaperTemplate {
+  id               Int               @id @default(autoincrement())
+  code             String            @unique // e.g. "AMCEC_AUTONOMOUS_SEE_STD"
+  name             String            // e.g. "AMCEC Standard Autonomous SEE Layout"
+  headerHtml       String?
+  footerHtml       String?
+  instructionsHtml String?
+  confidentialText String            @default("CONFIDENTIAL — AMCEC STRONG ROOM VAULT")
+  watermarkPattern String            @default("SERIALIZED_STAGGERED")
+  institutionLogo  String?
+  pageMargin       String            @default("15mm")
+  fontFamily       String            @default("Inter, system-ui, sans-serif")
+  isDefault        Boolean           @default(false)
+  assessmentEvents AssessmentEvent[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+// ─── Paper Version (Revision History & Content Hashes) ───
+
+model PaperVersion {
+  id             Int                 @id @default(autoincrement())
+  paperFormId    Int
+  paperForm      PaperForm           @relation(fields: [paperFormId], references: [id], onDelete: Cascade)
+  versionNumber  Int                 @default(1)
+  changeReason   String?             // e.g. "Initial automated assembly", "BoE scrutiny typo correction"
+  contentHash    String              // RFC 8785 Canonical JCS hash
+  status         String              @default("DRAFT") // "DRAFT", "UNDER_SCRUTINY", "APPROVED", "SEALED"
+  snapshots      PaperItemSnapshot[]
+  questionUsages QuestionUsage[]
+  sealedAt       DateTime?
+  sealedBy       Int?
+  createdBy      Int?
+  createdAt      DateTime            @default(now())
+
+  @@unique([paperFormId, versionNumber])
+  @@index([paperFormId])
+  @@index([contentHash])
+  @@index([status])
+}
+
+// ─── Blueprint Template (Reusable Academic Master) ───────
+
+model BlueprintTemplate {
+  id                  Int                        @id @default(autoincrement())
+  code                String                     @unique // e.g. "VTU_100M_5MOD_CHOICE"
+  name                String                     // e.g. "VTU Standard 100 Marks 5-Module Choice Template"
+  regulationProfileId Int?
+  regulationProfile   RegulationProfile?         @relation(fields: [regulationProfileId], references: [id], onDelete: SetNull)
+  totalMarks          Int                        @default(100)
+  durationMinutes     Int                        @default(180)
+  instructions        String?
+  sections            BlueprintTemplateSection[]
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  @@index([regulationProfileId])
+}
+
+model BlueprintTemplateSection {
+  id                  Int                     @id @default(autoincrement())
+  templateId          Int
+  template            BlueprintTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sectionName         String                  // e.g. "Module 1", "Module 2", "Part A"
+  compulsoryQuestions Int                     @default(1)
+  optionalQuestions   Int                     @default(1)
+  marksPerQuestion    Int                     @default(20)
+  orderIndex          Int                     @default(0)
+  rules               BlueprintTemplateRule[]
+
+  @@index([templateId])
+}
+
+model BlueprintTemplateRule {
+  id            Int                      @id @default(autoincrement())
+  sectionId     Int
+  section       BlueprintTemplateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  targetUnit    Int
+  targetBlooms  BloomsLevel?
+  requiredCount Int                      @default(2)
+
+  @@index([sectionId])
+}
+
+// ─── Assessment Result ───────────────────────────────────
+
+model AssessmentResult {
+  id                Int             @id @default(autoincrement())
+  assessmentEventId Int
+  assessmentEvent   AssessmentEvent @relation(fields: [assessmentEventId], references: [id], onDelete: Cascade)
+  usn               String
+  rawCieMarks       Float
+  rawSeeMarks       Float
+  scaledSeeMarks    Float
+  totalMarks        Float
+  letterGrade       String
+  gradePoint        Int
+  resultStatus      String          // "PASS", "FAIL", "ABSENT", "WITHHELD"
+  verifiedAt        DateTime?
+  publishedAt       DateTime?
+  createdAt         DateTime        @default(now())
+
+  @@unique([assessmentEventId, usn])
+  @@index([assessmentEventId])
+  @@index([usn])
+}
+
 
 
