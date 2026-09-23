@@ -349,6 +349,7 @@ model CourseOffering {
   schemeYear   String      // e.g. "2022"
   departmentId Int?
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  blueprints   AssessmentBlueprint[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -401,21 +402,22 @@ model Question {
 // ─── Question Version ────────────────────────────────────
 
 model QuestionVersion {
-  id                Int            @id @default(autoincrement())
+  id                Int                 @id @default(autoincrement())
   questionId        Int
-  question          Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  question          Question            @relation(fields: [questionId], references: [id], onDelete: Cascade)
   versionNumber     Int
-  stemRichJson      Json           // TipTap JSON (rich content, LaTeX, embedded SVG data)
-  plainText         String         // Plain text for searching
-  contentBlindIndex String?        // HMAC-SHA256 blind index
-  encryptedContent  String?        // AES-256-GCM ciphertext
-  iv                String?        // 96-bit IV
-  authTag           String?        // 128-bit GCM auth tag
+  stemRichJson      Json                // TipTap JSON (rich content, LaTeX, embedded SVG data)
+  plainText         String              // Plain text for searching
+  contentBlindIndex String?             // HMAC-SHA256 blind index
+  encryptedContent  String?             // AES-256-GCM ciphertext
+  iv                String?             // 96-bit IV
+  authTag           String?             // 128-bit GCM auth tag
   parts             QuestionPart[]
+  snapshots         PaperItemSnapshot[]
   createdById       Int
-  createdBy         User           @relation("QuestionVersionAuthor", fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy         User                @relation("QuestionVersionAuthor", fields: [createdById], references: [id], onDelete: Restrict)
   changeLog         String?
-  createdAt         DateTime       @default(now())
+  createdAt         DateTime            @default(now())
 
   @@unique([questionId, versionNumber])
   @@index([questionId])
@@ -460,4 +462,96 @@ model QuestionReview {
   @@index([questionId])
   @@index([reviewerId])
 }
+
+// ─── Assessment Blueprint ────────────────────────────────
+
+model AssessmentBlueprint {
+  id               Int                @id @default(autoincrement())
+  courseOfferingId Int
+  courseOffering   CourseOffering     @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  title            String             // e.g. "SEE Blueprint: 22CS61 Cloud Computing"
+  examType         String             // e.g. "SEE", "1IA", "2IA"
+  totalMarks       Int                // e.g. 100
+  durationMinutes  Int                // e.g. 180
+  instructions     String?
+  sections         BlueprintSection[]
+  paperForms       PaperForm[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([courseOfferingId])
+}
+
+// ─── Blueprint Section (e.g. Module 1, Part A) ────────────
+
+model BlueprintSection {
+  id                   Int             @id @default(autoincrement())
+  blueprintId          Int
+  blueprint            AssessmentBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  sectionName          String          // e.g. "Module 1", "Module 2", "Part A"
+  compulsoryQuestions  Int             @default(1)
+  optionalQuestions    Int             @default(1) // e.g. "Answer Q1 OR Q2"
+  marksPerQuestion     Int             @default(20)
+  rules                BlueprintRule[]
+  orderIndex           Int             @default(0)
+
+  @@index([blueprintId])
+}
+
+// ─── Blueprint Rule ───────────────────────────────────────
+
+model BlueprintRule {
+  id           Int              @id @default(autoincrement())
+  sectionId    Int
+  section      BlueprintSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  targetUnit   Int              // VTU Unit 1..5
+  targetBlooms BloomsLevel?
+  targetCoCode String?
+  requiredCount Int             @default(2) // Number of candidate questions required in this section
+
+  @@index([sectionId])
+}
+
+// ─── Parallel Paper Form (Set A, Set B, Reserve) ──────────
+
+model PaperForm {
+  id               Int                 @id @default(autoincrement())
+  blueprintId      Int
+  blueprint        AssessmentBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  setName          String              // e.g. "Set A", "Set B", "Set C (Reserve)"
+  status           String              @default("GENERATED") // "GENERATED", "UNDER_SCRUTINY", "APPROVED", "SEALED"
+  snapshots        PaperItemSnapshot[]
+  equivalenceScore Float?              // e.g. 98.5% equivalence
+  bloomVariance    Float?              // e.g. 2.1%
+  coVariance       Float?              // e.g. 1.8%
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@unique([blueprintId, setName])
+  @@index([blueprintId])
+}
+
+// ─── Immutable Paper Item Snapshot ───────────────────────
+
+model PaperItemSnapshot {
+  id                Int             @id @default(autoincrement())
+  paperFormId       Int
+  paperForm         PaperForm       @relation(fields: [paperFormId], references: [id], onDelete: Cascade)
+  questionVersionId Int
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
+  questionNumber    String          // e.g. "Q1(a)", "Q1(b)", "Q2"
+  moduleNumber      Int             // e.g. 1..5
+  isAlternative     Boolean         @default(false) // OR choice question
+  frozenStemJson    Json            // Immutable snapshot of text, LaTeX, and SVG
+  frozenMarks       Int
+  frozenBlooms      BloomsLevel
+  frozenCoCode      String
+  frozenRubric      Json?           // Immutable step-marking rubric
+  orderIndex        Int             @default(0)
+  createdAt         DateTime        @default(now())
+
+  @@index([paperFormId])
+  @@index([questionVersionId])
+}
+
 

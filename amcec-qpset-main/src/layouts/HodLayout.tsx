@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Home, BookOpen, Users, ClipboardList, PenTool, Eye, FileText, LogOut, Activity, Database } from 'lucide-react';
+import { Home, BookOpen, Users, ClipboardList, PenTool, Eye, FileText, LogOut, Activity, Database, Layers } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationDropdown } from '@/components/NotificationDropdown';
 import { AppFooter } from '@/components/AppLayout';
@@ -10,6 +10,7 @@ import amcecLogo from '@/assets/amcec-logo.png';
 const hodNav = [
   { title: 'My Dashboard', url: '/hod/dashboard', icon: Home },
   { title: 'Question Bank', url: '/hod/question-bank', icon: Database },
+  { title: 'Assessment Blueprints', url: '/hod/blueprints', icon: Layers },
   { title: 'Register Courses', url: '/hod/register-courses', icon: BookOpen },
   { title: 'Register QP Setters', url: '/hod/register-qpsetters', icon: Users },
   { title: 'My Assignments', url: '/hod/assignments', icon: ClipboardList },

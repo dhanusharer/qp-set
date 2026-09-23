@@ -13,6 +13,7 @@ const navigationGroups = [
     items: [
       { title: 'Executive Dashboard', url: '/controller/dashboard', icon: LayoutDashboard },
       { title: 'Exam Cycles & Schedules', url: '/controller/create-assessment', icon: CalendarRange },
+      { title: 'Assessment Blueprints', url: '/controller/blueprints', icon: Layers },
       { title: 'Course Allocations', url: '/controller/assign', icon: ClipboardList },
       { title: 'Assigned Papers Grid', url: '/controller/assigned-grid', icon: Layers },
     ]
