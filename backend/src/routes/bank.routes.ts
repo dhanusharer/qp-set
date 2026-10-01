@@ -5,6 +5,7 @@ import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { validateBody, validateParams, validateQuery } from "../middleware/validate.js";
 import { encryptPayload, decryptPayload, generateBlindIndex } from "../utils/cryptoVault.js";
+import { recommendAndFrameQuestions } from "../services/questionFramer.service.js";
 
 export const bankRouter = Router();
 bankRouter.use(requireAuth);
@@ -562,3 +563,31 @@ bankRouter.get("/courses/:courseId/analytics", async (req, res) => {
     courseOutcomes: course.courseOutcomes
   });
 });
+
+// ─── POST /api/v1/bank/recommend-and-frame ────────────────
+const recommendAndFrameSchema = z.object({
+  courseCode: z.string().optional(),
+  courseName: z.string().optional(),
+  moduleNumber: z.number().int().min(1).max(5).optional(),
+  partialText: z.string().default(""),
+  targetMarks: z.number().int().positive().optional().default(10),
+  targetBlooms: z.enum(["L1", "L2", "L3", "L4", "L5", "L6"]).optional().default("L3")
+});
+
+bankRouter.post(
+  "/recommend-and-frame",
+  requireRole(Role.controller, Role.hod, Role.qpsetter),
+  validateBody(recommendAndFrameSchema),
+  async (req, res) => {
+    try {
+      const result = await recommendAndFrameQuestions(req.body);
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to recommend and frame questions" });
+    }
+  }
+);
+

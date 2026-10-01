@@ -6,6 +6,7 @@ import { MathView } from '@/components/MathView';
 import { SvgDiagramCanvas } from '@/components/SvgDiagramCanvas';
 import { LatexMathModal } from './LatexMathModal';
 import { SchemeOfEvaluationDrawer } from './SchemeOfEvaluationDrawer';
+import { QuestionFramerDrawer } from './QuestionFramerDrawer';
 import { QuestionSubpart, BLOOMS_LABELS, CO_OPTIONS, RubricStep } from './types';
 import {
   Sigma,
@@ -18,6 +19,7 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
+  Wand2,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -26,6 +28,9 @@ interface SubpartEditorProps {
   onChange: (updated: QuestionSubpart) => void;
   onDelete?: () => void;
   canDelete?: boolean;
+  moduleNumber?: number;
+  courseCode?: string;
+  courseName?: string;
 }
 
 export const SubpartEditor: React.FC<SubpartEditorProps> = ({
@@ -33,9 +38,13 @@ export const SubpartEditor: React.FC<SubpartEditorProps> = ({
   onChange,
   onDelete,
   canDelete = true,
+  moduleNumber = 1,
+  courseCode = '21CS32',
+  courseName = 'Data Structures & Applications',
 }) => {
   const [mathModalOpen, setMathModalOpen] = useState(false);
   const [schemeDrawerOpen, setSchemeDrawerOpen] = useState(false);
+  const [framerOpen, setFramerOpen] = useState(false);
   const [diagramModalOpen, setDiagramModalOpen] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -127,7 +136,7 @@ export const SubpartEditor: React.FC<SubpartEditorProps> = ({
       </div>
 
       {/* Question Text Area */}
-      <div>
+      <div className="space-y-1.5">
         <textarea
           value={subpart.text}
           onChange={(e) => onChange({ ...subpart, text: e.target.value })}
@@ -135,6 +144,21 @@ export const SubpartEditor: React.FC<SubpartEditorProps> = ({
           placeholder="Enter question text here... You can embed LaTeX math ($E=mc^2$) and diagrams."
           className="w-full text-xs p-2.5 rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-primary text-foreground leading-relaxed"
         />
+        {(!subpart.text || subpart.text.length < 20) && (
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] text-muted-foreground italic flex items-center gap-1">
+              <Sparkles className="h-3 w-3 text-accent" />
+              Need inspiration? Use AI Framer & PYQ Radar to browse historical questions and cognitive stems.
+            </span>
+            <button
+              type="button"
+              onClick={() => setFramerOpen(true)}
+              className="text-[10px] font-semibold text-accent hover:underline flex items-center gap-0.5"
+            >
+              Open Framer <Wand2 className="h-2.5 w-2.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Embedded Diagram Preview if Present */}
@@ -258,6 +282,19 @@ export const SubpartEditor: React.FC<SubpartEditorProps> = ({
               Code Block
             </Button>
           )}
+
+          {/* AI Question Framer & PYQ Radar Trigger */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setFramerOpen(true)}
+            className="h-7 text-[11px] gap-1 px-2.5 bg-accent/10 text-accent border-accent/30 hover:bg-accent hover:text-accent-foreground font-semibold"
+            title="Intelligent Question Framer & Historical VTU PYQs"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            AI Framer & PYQs
+          </Button>
         </div>
 
         {/* Scheme of Evaluation Drawer Trigger */}
@@ -299,6 +336,28 @@ export const SubpartEditor: React.FC<SubpartEditorProps> = ({
         rubric={subpart.markingRubric}
         modelAnswer={subpart.modelAnswer || ''}
         onSave={handleSaveRubric}
+      />
+
+      {/* Cognitive Question Framer & Historical PYQ Drawer */}
+      <QuestionFramerDrawer
+        isOpen={framerOpen}
+        onClose={() => setFramerOpen(false)}
+        initialPrompt={subpart.text}
+        targetMarks={subpart.marks}
+        targetBlooms={subpart.bloomsLevel}
+        moduleNumber={moduleNumber}
+        courseCode={courseCode}
+        courseName={courseName}
+        onAdoptQuestion={(adopted) => {
+          onChange({
+            ...subpart,
+            text: adopted.text,
+            marks: adopted.marks,
+            bloomsLevel: adopted.bloomsLevel,
+            coMapping: adopted.coMapping,
+            markingRubric: adopted.rubricSteps,
+          });
+        }}
       />
 
       {/* SVG Diagram Canvas Modal */}
