@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useApp } from '@/contexts/AppContext';
@@ -21,6 +21,10 @@ import {
   Wand2,
   ShieldCheck,
   FileCheck,
+  Download,
+  Upload,
+  History,
+  RotateCcw,
 } from 'lucide-react';
 import {
   QuestionPaperContent,
@@ -32,6 +36,7 @@ import { ModuleAccordion } from '@/components/paper-authoring/ModuleAccordion';
 import { RegulatoryDiagnosticsRadar } from '@/components/paper-authoring/RegulatoryDiagnosticsRadar';
 import { OfficialPaperPreview } from '@/components/paper-authoring/OfficialPaperPreview';
 import { ComplianceAuditorModal } from '@/components/paper-authoring/ComplianceAuditorModal';
+import { usePaperAutoSave } from '@/hooks/usePaperAutoSave';
 
 export default function CreatePaper() {
   const { currentUser } = useAuth();
@@ -87,6 +92,48 @@ export default function CreatePaper() {
       setPaper(parseOrConvertPaperContent(rawContent, courseCode, courseName, semester, maxMarks));
     }
   }, [currentAssignment, courseCode, courseName, semester, maxMarks]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Continuous local auto-save & crash recovery engine
+  const {
+    saveStatus,
+    lastSavedTime,
+    hasRecoverableDraft,
+    recoverableTimestamp,
+    restoreDraft,
+    discardDraft,
+    clearDraft,
+    exportBackup,
+    importBackup,
+  } = usePaperAutoSave({
+    assignmentId: currentAssignment?.id,
+    paper,
+    serverUpdatedAt: currentAssignment?.paper?.updatedAt,
+    onRestore: (restored) => setPaper(restored),
+  });
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      await importBackup(file);
+      toast({
+        title: 'Offline Backup Imported',
+        description: 'Question paper content successfully restored from backup file.',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Import Failed',
+        description: err.message || 'Could not parse question paper backup file.',
+        variant: 'destructive',
+      });
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   // Update a single module
   const handleUpdateModule = (updatedModule: ExamModule) => {
@@ -203,6 +250,7 @@ export default function CreatePaper() {
 
   const handleConfirmSubmit = async () => {
     await handleSave(true);
+    clearDraft();
     setAuditModalOpen(false);
   };
 
@@ -235,10 +283,64 @@ export default function CreatePaper() {
 
   return (
     <div className="space-y-6">
+      {/* Crash Recovery Notification Banner */}
+      {hasRecoverableDraft && (
+        <div className="bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-600 mt-0.5">
+              <History className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-foreground">
+                  Unsaved Local Draft Detected
+                </h4>
+                <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40">
+                  Crash Recovery
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                A newer local draft snapshot from {recoverableTimestamp ? new Date(recoverableTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'recently'} was preserved in browser memory. Would you like to restore it?
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              onClick={() => {
+                restoreDraft();
+                toast({
+                  title: 'Draft Restored',
+                  description: 'Successfully restored all modules and evaluation schemes from your local snapshot.',
+                });
+              }}
+              className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold gap-1.5"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Restore Draft
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                discardDraft();
+                toast({
+                  title: 'Draft Cache Discarded',
+                  description: 'Local recovery cache has been cleared.',
+                });
+              }}
+              className="h-8 text-xs border-amber-500/30 hover:bg-muted text-muted-foreground"
+            >
+              Discard
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner & Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card border rounded-2xl p-6 shadow-xs">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
@@ -254,17 +356,67 @@ export default function CreatePaper() {
             <Badge variant="outline" className="text-xs font-mono">
               {paper.courseCode}
             </Badge>
+
+            {/* Autosave Status Badge */}
+            {saveStatus === 'saving' && (
+              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/20 animate-pulse">
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Auto-saving locally...
+              </Badge>
+            )}
+            {saveStatus === 'saved' && (
+              <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 font-mono">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                {lastSavedTime ? `Auto-saved ${lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Auto-saved locally'}
+              </Badge>
+            )}
+            {saveStatus === 'unsaved' && (
+              <Badge variant="outline" className="text-xs text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5 animate-pulse" />
+                Unsaved edits
+              </Badge>
+            )}
           </div>
           <h1 className="font-serif text-2xl font-bold text-foreground tracking-tight">
             {paper.courseName}
           </h1>
           <p className="text-xs text-muted-foreground">
-            AMCEC Autonomous Autonomous Paper Setting Suite • {paper.semester} • VTU Modular Format (5 Modules with Internal Choice)
+            AMCEC Autonomous Paper Setting Suite • {paper.semester} • VTU Modular Format (5 Modules with Internal Choice)
           </p>
         </div>
 
         {/* Action Buttons & View Modes */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Offline JSON Backup & Recovery */}
+          <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={exportBackup}
+              title="Export paper snapshot as JSON backup file"
+              className="h-8 text-xs px-2.5 gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <Download className="h-3.5 w-3.5 text-primary" />
+              Backup .json
+            </Button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept=".json,application/json"
+              className="hidden"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              title="Import paper from JSON backup file"
+              className="h-8 text-xs px-2.5 gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Import
+            </Button>
+          </div>
+
           <div className="bg-muted/60 p-1 rounded-xl flex items-center border">
             <Button
               size="sm"
