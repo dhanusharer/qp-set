@@ -19,6 +19,44 @@ export const OfficialPaperPreview: React.FC<OfficialPaperPreviewProps> = ({
 }) => {
   return (
     <div className="space-y-4">
+      {/* Dedicated A4 Print & Confidential PDF Stylesheet */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 12mm 15mm 15mm 15mm;
+          }
+          body {
+            background: #ffffff !important;
+            color: #000000 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          nav, header, footer, aside, .no-print, button, .lucide {
+            display: none !important;
+          }
+          .official-paper-canvas {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+          .print-avoid-break {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+          .confidential-watermark {
+            display: flex !important;
+          }
+        }
+        @media screen {
+          .confidential-watermark {
+            display: none;
+          }
+        }
+      `}</style>
+
       {/* Top Action Bar */}
       <div className="flex items-center justify-between bg-card p-3 rounded-xl border no-print shadow-xs">
         <div className="flex items-center gap-2">
@@ -37,7 +75,14 @@ export const OfficialPaperPreview: React.FC<OfficialPaperPreviewProps> = ({
       </div>
 
       {/* Official Examination Paper Canvas (A4 Standard) */}
-      <div className="bg-white text-slate-900 border shadow-md rounded-lg p-8 max-w-4xl mx-auto space-y-6 print:p-0 print:border-none print:shadow-none font-serif">
+      <div className="official-paper-canvas relative bg-white text-slate-900 border shadow-md rounded-lg p-8 max-w-4xl mx-auto space-y-6 print:p-0 print:border-none print:shadow-none font-serif">
+        {/* Confidential Watermark (Visible in Print & PDF Exports) */}
+        <div className="confidential-watermark fixed inset-0 items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
+          <span className="text-slate-900/[0.04] text-5xl font-black uppercase tracking-widest -rotate-45 transform whitespace-nowrap">
+            CONFIDENTIAL • AMCEC AUTONOMOUS
+          </span>
+        </div>
+
         {/* USN Grid */}
         <div className="flex items-center justify-end gap-2 text-xs font-sans pb-2">
           <span className="font-bold text-[11px] tracking-wider uppercase">USN:</span>
@@ -127,7 +172,7 @@ export const OfficialPaperPreview: React.FC<OfficialPaperPreviewProps> = ({
 
           {/* Module Loops */}
           {paper.modules.map((mod) => (
-            <div key={mod.id} className="divide-y divide-slate-300">
+            <div key={mod.id} className="divide-y divide-slate-300 print-avoid-break">
               {/* Module Header Bar */}
               <div className="bg-slate-200 font-sans font-bold text-slate-900 text-center py-1 text-xs tracking-wider uppercase">
                 MODULE {mod.moduleNumber}
@@ -221,9 +266,12 @@ export const OfficialPaperPreview: React.FC<OfficialPaperPreviewProps> = ({
           ))}
         </div>
 
-        {/* Paper End Mark */}
-        <div className="text-center font-sans text-xs font-bold text-slate-500 pt-4 border-t border-slate-300">
-          * * * END OF QUESTION PAPER * * *
+        {/* Paper End Mark & Confidential Print Footer */}
+        <div className="text-center font-sans text-xs font-bold text-slate-500 pt-4 border-t border-slate-300 space-y-1">
+          <div>* * * END OF QUESTION PAPER * * *</div>
+          <div className="text-[10px] text-slate-400 font-mono hidden print:block pt-2 tracking-wide uppercase">
+            AMC ENGINEERING COLLEGE (AUTONOMOUS) • {paper.courseCode} — {paper.courseName} • CONFIDENTIAL EXAMINATION ARCHIVE [{setLabel || 'Set A'}]
+          </div>
         </div>
       </div>
     </div>
