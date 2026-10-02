@@ -25,12 +25,18 @@ import {
   Upload,
   History,
   RotateCcw,
+  Copy,
+  Files,
 } from 'lucide-react';
 import {
   QuestionPaperContent,
   ExamModule,
   parseOrConvertPaperContent,
   BLOOMS_LABELS,
+  MultiSetPaperContent,
+  PaperSetIdentifier,
+  parseOrConvertMultiSet,
+  clonePaperBlueprint,
 } from '@/components/paper-authoring/types';
 import { ModuleAccordion } from '@/components/paper-authoring/ModuleAccordion';
 import { RegulatoryDiagnosticsRadar } from '@/components/paper-authoring/RegulatoryDiagnosticsRadar';
@@ -67,9 +73,9 @@ export default function CreatePaper() {
   const courseName = currentAssignment?.course?.courseName || 'Data Structures & Applications';
   const semester = currentAssignment?.semester || '3rd Semester';
 
-  // Question Paper state
-  const [paper, setPaper] = useState<QuestionPaperContent>(() =>
-    parseOrConvertPaperContent(
+  // Multi-Set Question Paper state (VTU Mandate: Set A & Set B)
+  const [multiSet, setMultiSet] = useState<MultiSetPaperContent>(() =>
+    parseOrConvertMultiSet(
       currentAssignment?.paper?.content,
       courseCode,
       courseName,
@@ -77,6 +83,10 @@ export default function CreatePaper() {
       maxMarks
     )
   );
+  const [activeSetId, setActiveSetId] = useState<PaperSetIdentifier>('A');
+
+  // Active paper currently focused
+  const paper = activeSetId === 'A' ? multiSet.setA : multiSet.setB;
 
   // Sync when currentAssignment changes or loads
   useEffect(() => {
@@ -89,7 +99,7 @@ export default function CreatePaper() {
           console.error('Failed to parse paper content JSON', e);
         }
       }
-      setPaper(parseOrConvertPaperContent(rawContent, courseCode, courseName, semester, maxMarks));
+      setMultiSet(parseOrConvertMultiSet(rawContent, courseCode, courseName, semester, maxMarks));
     }
   }, [currentAssignment, courseCode, courseName, semester, maxMarks]);
 
@@ -106,11 +116,17 @@ export default function CreatePaper() {
     clearDraft,
     exportBackup,
     importBackup,
-  } = usePaperAutoSave({
+  } = usePaperAutoSave<MultiSetPaperContent>({
     assignmentId: currentAssignment?.id,
-    paper,
+    paper: multiSet,
     serverUpdatedAt: currentAssignment?.paper?.updatedAt,
-    onRestore: (restored) => setPaper(restored),
+    onRestore: (restored) => {
+      if (restored && (restored as any).setA) {
+        setMultiSet(restored);
+      } else if (restored && (restored as any).modules) {
+        setMultiSet((prev) => ({ ...prev, setA: restored as any }));
+      }
+    },
   });
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -135,22 +151,46 @@ export default function CreatePaper() {
     }
   };
 
-  // Update a single module
+  // Update a single module in active set
   const handleUpdateModule = (updatedModule: ExamModule) => {
-    setPaper((prev) => ({
-      ...prev,
-      modules: prev.modules.map((m) => (m.id === updatedModule.id ? updatedModule : m)),
-      metadata: {
-        ...prev.metadata,
-        lastSavedAt: new Date().toISOString(),
-      },
-    }));
+    setMultiSet((prev) => {
+      const activePaper = activeSetId === 'A' ? prev.setA : prev.setB;
+      const updatedPaper: QuestionPaperContent = {
+        ...activePaper,
+        modules: activePaper.modules.map((m) => (m.id === updatedModule.id ? updatedModule : m)),
+        metadata: {
+          ...activePaper.metadata,
+          lastSavedAt: new Date().toISOString(),
+        },
+      };
+      return {
+        ...prev,
+        [activeSetId === 'A' ? 'setA' : 'setB']: updatedPaper,
+      };
+    });
   };
 
-  // AI Auto-Balance Bloom's Levels (Target: 30-35% LOTS, 65-70% HOTS)
+  // Clone Set A blueprint into Set B
+  const handleCloneBlueprintToSetB = () => {
+    setMultiSet((prev) => {
+      const clonedSetB = clonePaperBlueprint(prev.setA, 'B');
+      return {
+        ...prev,
+        setB: clonedSetB,
+      };
+    });
+    setActiveSetId('B');
+    toast({
+      title: 'Blueprint Cloned to Set B! 📋',
+      description: 'Copied Module structure, marks breakdown, Bloom levels, and CO mappings from Set A to Set B.',
+    });
+  };
+
+  // AI Auto-Balance Bloom's Levels on active set
   const handleAutoBalanceBlooms = () => {
-    setPaper((prev) => {
-      const updatedModules = prev.modules.map((mod) => {
+    setMultiSet((prev) => {
+      const activePaper = activeSetId === 'A' ? prev.setA : prev.setB;
+      const updatedModules = activePaper.modules.map((mod) => {
         // Question A: subpart 1 = L2 (LOTS), subpart 2 = L3/L4 (HOTS)
         const newSubpartsA = mod.questionA.subparts.map((sp, idx) => ({
           ...sp,
@@ -172,19 +212,23 @@ export default function CreatePaper() {
         };
       });
 
-      return { ...prev, modules: updatedModules };
+      return {
+        ...prev,
+        [activeSetId === 'A' ? 'setA' : 'setB']: { ...activePaper, modules: updatedModules },
+      };
     });
 
     toast({
-      title: '🎯 Bloom’s Distribution Auto-Balanced',
+      title: `🎯 Bloom’s Distribution Balanced (Set ${activeSetId})`,
       description: 'Adjusted subparts to optimal VTU Autonomous ratio (~30% LOTS / ~70% HOTS).',
     });
   };
 
-  // AI Course Outcome Alignment
+  // AI Course Outcome Alignment on active set
   const handleAlignOutcomes = () => {
-    setPaper((prev) => {
-      const updatedModules = prev.modules.map((mod) => {
+    setMultiSet((prev) => {
+      const activePaper = activeSetId === 'A' ? prev.setA : prev.setB;
+      const updatedModules = activePaper.modules.map((mod) => {
         const assignedCO = `CO${Math.min(mod.moduleNumber, 5)}`;
         return {
           ...mod,
@@ -199,13 +243,24 @@ export default function CreatePaper() {
         };
       });
 
-      return { ...prev, modules: updatedModules };
+      return {
+        ...prev,
+        [activeSetId === 'A' ? 'setA' : 'setB']: { ...activePaper, modules: updatedModules },
+      };
     });
 
     toast({
-      title: '📚 Course Outcomes Aligned',
+      title: `📚 Course Outcomes Aligned (Set ${activeSetId})`,
       description: 'Mapped Module 1 through 5 questions to CO1 through CO5 respectively.',
     });
+  };
+
+  // Helper to calculate total attempted marks in a set
+  const calcSetMarks = (p: QuestionPaperContent) => {
+    return p.modules.reduce((acc, m) => {
+      const marksA = m.questionA.subparts.reduce((sum, sp) => sum + (Number(sp.marks) || 0), 0);
+      return acc + marksA;
+    }, 0);
   };
 
   // Save draft or submit
@@ -213,8 +268,12 @@ export default function CreatePaper() {
     if (!currentAssignment) return;
     setSaving(true);
     try {
+      const payloadToSave: MultiSetPaperContent = {
+        ...multiSet,
+        activeSet: activeSetId,
+      };
       await apiClient.put(`/assignments/${currentAssignment.id}/paper`, {
-        content: paper,
+        content: payloadToSave,
         submit,
       });
 
@@ -461,9 +520,79 @@ export default function CreatePaper() {
         </div>
       </div>
 
+      {/* Autonomous Multi-Set Switcher Ribbon (VTU Exam Mandate: Parallel Set A & Set B) */}
+      <div className="bg-card border-2 border-primary/20 rounded-2xl p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 pl-1">
+            <Files className="h-4 w-4 text-primary" /> Autonomous Dual-Set Mandate:
+          </span>
+          <div className="flex items-center gap-2 bg-muted/60 p-1 rounded-xl border">
+            <Button
+              size="sm"
+              variant={activeSetId === 'A' ? 'default' : 'ghost'}
+              onClick={() => setActiveSetId('A')}
+              className="h-8 px-3 text-xs font-semibold gap-1.5"
+            >
+              <FileCheck className="h-3.5 w-3.5 text-blue-500" />
+              Set A (Primary)
+              <Badge
+                variant={calcSetMarks(multiSet.setA) >= maxMarks ? 'default' : 'secondary'}
+                className={`ml-1 text-[10px] py-0 px-1 font-mono ${
+                  calcSetMarks(multiSet.setA) >= maxMarks ? 'bg-emerald-600 text-white' : ''
+                }`}
+              >
+                {calcSetMarks(multiSet.setA)}/{maxMarks}M
+              </Badge>
+            </Button>
+            <Button
+              size="sm"
+              variant={activeSetId === 'B' ? 'default' : 'ghost'}
+              onClick={() => setActiveSetId('B')}
+              className="h-8 px-3 text-xs font-semibold gap-1.5"
+            >
+              <FileCheck className="h-3.5 w-3.5 text-purple-500" />
+              Set B (Confidential Reserve)
+              <Badge
+                variant={calcSetMarks(multiSet.setB) >= maxMarks ? 'default' : 'secondary'}
+                className={`ml-1 text-[10px] py-0 px-1 font-mono ${
+                  calcSetMarks(multiSet.setB) >= maxMarks ? 'bg-emerald-600 text-white' : ''
+                }`}
+              >
+                {calcSetMarks(multiSet.setB)}/{maxMarks}M
+              </Badge>
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {activeSetId === 'A' ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCloneBlueprintToSetB}
+              title="Clone Set A structure (marks, blooms, COs) to Set B"
+              className="h-8 text-xs font-semibold border-primary/30 text-primary hover:bg-primary/10 gap-1.5"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Clone Blueprint to Set B
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveSetId('A')}
+              className="h-8 text-xs font-semibold gap-1.5"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Set A
+            </Button>
+          )}
+        </div>
+      </div>
+
       {activeTab === 'preview' ? (
         /* Official VTU Autonomous Question Paper Preview Mode */
-        <OfficialPaperPreview paper={paper} />
+        <OfficialPaperPreview paper={paper} setLabel={`Set ${activeSetId}`} />
       ) : (
         /* Authoring Studio Mode */
         <div className="space-y-6">
@@ -590,6 +719,7 @@ export default function CreatePaper() {
         isOpen={auditModalOpen}
         onClose={() => setAuditModalOpen(false)}
         paper={paper}
+        activeSetLabel={`Set ${activeSetId}`}
         onConfirmSubmit={handleConfirmSubmit}
         submitting={saving}
         onJumpToModule={(modNum) => {

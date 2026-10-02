@@ -8,11 +8,13 @@ import amcecLogo from '@/assets/amcec-logo.png';
 
 interface OfficialPaperPreviewProps {
   paper: QuestionPaperContent;
+  setLabel?: string;
   onPrint?: () => void;
 }
 
 export const OfficialPaperPreview: React.FC<OfficialPaperPreviewProps> = ({
   paper,
+  setLabel,
   onPrint = () => window.print(),
 }) => {
   return (
@@ -69,11 +71,18 @@ export const OfficialPaperPreview: React.FC<OfficialPaperPreviewProps> = ({
           </div>
 
           <div className="pt-2">
-            <h2 className="text-sm font-bold tracking-wider font-sans uppercase underline">
-              {paper.examType === 'SEE'
-                ? 'Semester End Examination (SEE) — Autonomous Degree'
-                : 'Continuous Internal Evaluation (CIE)'}
-            </h2>
+            <div className="flex items-center justify-center gap-2">
+              <h2 className="text-sm font-bold tracking-wider font-sans uppercase underline">
+                {paper.examType === 'SEE'
+                  ? 'Semester End Examination (SEE) — Autonomous Degree'
+                  : 'Continuous Internal Evaluation (CIE)'}
+              </h2>
+              {setLabel && (
+                <span className="font-mono text-xs font-black px-2 py-0.5 border-2 border-slate-900 rounded bg-amber-50 uppercase tracking-widest text-slate-900">
+                  [{setLabel}]
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

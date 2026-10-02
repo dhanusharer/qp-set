@@ -33,6 +33,7 @@ interface ComplianceAuditorModalProps {
   isOpen: boolean;
   onClose: () => void;
   paper: QuestionPaperContent;
+  activeSetLabel?: string;
   onConfirmSubmit: () => void;
   submitting: boolean;
   onJumpToModule?: (moduleNumber: number) => void;
@@ -42,6 +43,7 @@ export const ComplianceAuditorModal: React.FC<ComplianceAuditorModalProps> = ({
   isOpen,
   onClose,
   paper,
+  activeSetLabel,
   onConfirmSubmit,
   submitting,
   onJumpToModule,
@@ -204,8 +206,13 @@ export const ComplianceAuditorModal: React.FC<ComplianceAuditorModalProps> = ({
               {isSubmissionAllowed ? <ShieldCheck className="h-6 w-6" /> : <ShieldAlert className="h-6 w-6" />}
             </div>
             <div>
-              <DialogTitle className="font-serif text-lg font-bold">
+              <DialogTitle className="font-serif text-lg font-bold flex items-center gap-2">
                 Pre-Submission Autonomous Compliance Audit
+                {activeSetLabel && (
+                  <Badge variant="outline" className="font-mono text-xs font-bold bg-primary/10 text-primary border-primary/20">
+                    {activeSetLabel}
+                  </Badge>
+                )}
               </DialogTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Automated regulatory audit against VTU Autonomous Examination Blueprint & NBA Outcome Criteria

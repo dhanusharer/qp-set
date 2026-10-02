@@ -1,38 +1,37 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { QuestionPaperContent } from '@/components/paper-authoring/types';
 
-interface LocalDraftRecord {
+interface LocalDraftRecord<T = any> {
   assignmentId: string | number;
-  paper: QuestionPaperContent;
+  paper: T;
   savedAt: string; // ISO timestamp
 }
 
 export type AutoSaveStatus = 'saved' | 'saving' | 'unsaved';
 
-interface UsePaperAutoSaveOptions {
+interface UsePaperAutoSaveOptions<T = any> {
   assignmentId: string | number | undefined;
-  paper: QuestionPaperContent;
+  paper: T;
   serverUpdatedAt?: string;
   debounceMs?: number;
-  onRestore?: (restoredPaper: QuestionPaperContent) => void;
+  onRestore?: (restoredPaper: T) => void;
 }
 
-export function usePaperAutoSave({
+export function usePaperAutoSave<T = any>({
   assignmentId,
   paper,
   serverUpdatedAt,
   debounceMs = 1200,
   onRestore,
-}: UsePaperAutoSaveOptions) {
+}: UsePaperAutoSaveOptions<T>) {
   const [saveStatus, setSaveStatus] = useState<AutoSaveStatus>('saved');
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
   const [hasRecoverableDraft, setHasRecoverableDraft] = useState(false);
   const [recoverableTimestamp, setRecoverableTimestamp] = useState<string | null>(null);
-  const [cachedDraft, setCachedDraft] = useState<QuestionPaperContent | null>(null);
+  const [cachedDraft, setCachedDraft] = useState<T | null>(null);
 
   const storageKey = assignmentId ? `amcec_qp_draft_${assignmentId}` : null;
   const isInitialMount = useRef(true);
-  const paperRef = useRef(paper);
+  const paperRef = useRef<T>(paper);
   paperRef.current = paper;
 
   // Check for existing recoverable draft on initial mount
@@ -42,13 +41,19 @@ export function usePaperAutoSave({
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
-        const parsed: LocalDraftRecord = JSON.parse(raw);
+        const parsed: LocalDraftRecord<T> = JSON.parse(raw);
         if (parsed && parsed.paper && parsed.savedAt) {
           const draftTime = new Date(parsed.savedAt).getTime();
           const serverTime = serverUpdatedAt ? new Date(serverUpdatedAt).getTime() : 0;
 
           // If draft is strictly newer than server's version and has content
-          if (draftTime > serverTime && parsed.paper.modules?.length > 0) {
+          const pAny = parsed.paper as any;
+          const hasContent = Boolean(
+            (pAny.modules && pAny.modules.length > 0) ||
+            (pAny.setA && pAny.setA.modules && pAny.setA.modules.length > 0)
+          );
+
+          if (draftTime > serverTime && hasContent) {
             setCachedDraft(parsed.paper);
             setRecoverableTimestamp(parsed.savedAt);
             setHasRecoverableDraft(true);
@@ -135,7 +140,9 @@ export function usePaperAutoSave({
         JSON.stringify(exportData, null, 2)
       )}`;
       const downloadAnchor = document.createElement('a');
-      const filename = `${paperRef.current.metadata.courseCode || 'QP'}_Draft_Backup_${new Date()
+      const p = paperRef.current as any;
+      const code = p?.metadata?.courseCode || p?.courseCode || p?.setA?.courseCode || 'QP';
+      const filename = `${code}_Draft_Backup_${new Date()
         .toISOString()
         .slice(0, 10)}.json`;
       downloadAnchor.setAttribute('href', jsonString);
@@ -151,14 +158,19 @@ export function usePaperAutoSave({
 
   // Import JSON backup file
   const importBackup = useCallback(
-    (file: File): Promise<QuestionPaperContent> => {
+    (file: File): Promise<T> => {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (event) => {
           try {
             const parsed = JSON.parse(event.target?.result as string);
-            const importedPaper = parsed.paper || parsed;
-            if (!importedPaper.modules || !Array.isArray(importedPaper.modules)) {
+            const importedPaper = (parsed.paper || parsed) as T;
+            const pAny = importedPaper as any;
+            const isValid = Boolean(
+              (pAny.modules && Array.isArray(pAny.modules)) ||
+              (pAny.setA && Array.isArray(pAny.setA.modules))
+            );
+            if (!isValid) {
               throw new Error('Invalid Question Paper backup schema: modules missing');
             }
             if (onRestore) {
@@ -166,7 +178,7 @@ export function usePaperAutoSave({
             }
             // Also store to localStorage
             if (storageKey) {
-              const payload: LocalDraftRecord = {
+              const payload: LocalDraftRecord<T> = {
                 assignmentId: assignmentId || '',
                 paper: importedPaper,
                 savedAt: new Date().toISOString(),

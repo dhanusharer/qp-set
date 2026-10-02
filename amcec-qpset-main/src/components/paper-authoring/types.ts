@@ -302,3 +302,107 @@ export function parseOrConvertPaperContent(
 
   return createInitialPaperStructure(courseCode, courseName);
 }
+
+export type PaperSetIdentifier = 'A' | 'B';
+
+export interface MultiSetPaperContent {
+  setA: QuestionPaperContent;
+  setB: QuestionPaperContent;
+  activeSet?: PaperSetIdentifier;
+}
+
+export function clonePaperBlueprint(
+  sourcePaper: QuestionPaperContent,
+  targetSet: 'A' | 'B' = 'B'
+): QuestionPaperContent {
+  const clonedModules: ExamModule[] = sourcePaper.modules.map((mod) => ({
+    id: `mod_${mod.moduleNumber}_set${targetSet}`,
+    moduleNumber: mod.moduleNumber,
+    moduleTitle: mod.moduleTitle,
+    questionA: {
+      id: `q_${mod.questionA.questionNumber}_set${targetSet}`,
+      questionNumber: mod.questionA.questionNumber,
+      subparts: mod.questionA.subparts.map((sp) => ({
+        id: `sub_${mod.questionA.questionNumber}_${sp.partLabel.replace(/[^a-z0-9]/gi, '')}_set${targetSet}_${Math.random().toString(36).substr(2, 6)}`,
+        partLabel: sp.partLabel,
+        text: '', // Ready for Set B framing with identical rigor
+        marks: sp.marks,
+        bloomsLevel: sp.bloomsLevel,
+        coMapping: sp.coMapping,
+        difficulty: sp.difficulty,
+        markingRubric: sp.markingRubric.map((r) => ({
+          ...r,
+          id: `rub_${Math.random().toString(36).substr(2, 6)}`,
+          description: '',
+        })),
+        modelAnswer: '',
+      })),
+    },
+    questionB: {
+      id: `q_${mod.questionB.questionNumber}_set${targetSet}`,
+      questionNumber: mod.questionB.questionNumber,
+      subparts: mod.questionB.subparts.map((sp) => ({
+        id: `sub_${mod.questionB.questionNumber}_${sp.partLabel.replace(/[^a-z0-9]/gi, '')}_set${targetSet}_${Math.random().toString(36).substr(2, 6)}`,
+        partLabel: sp.partLabel,
+        text: '',
+        marks: sp.marks,
+        bloomsLevel: sp.bloomsLevel,
+        coMapping: sp.coMapping,
+        difficulty: sp.difficulty,
+        markingRubric: sp.markingRubric.map((r) => ({
+          ...r,
+          id: `rub_${Math.random().toString(36).substr(2, 6)}`,
+          description: '',
+        })),
+        modelAnswer: '',
+      })),
+    },
+  }));
+
+  return {
+    ...sourcePaper,
+    modules: clonedModules,
+    metadata: {
+      ...sourcePaper.metadata,
+      lastSavedAt: new Date().toISOString(),
+    },
+  };
+}
+
+export function isMultiSetContent(raw: any): raw is MultiSetPaperContent {
+  return Boolean(
+    raw &&
+    typeof raw === 'object' &&
+    raw.setA &&
+    Array.isArray(raw.setA.modules) &&
+    raw.setB &&
+    Array.isArray(raw.setB.modules)
+  );
+}
+
+export function parseOrConvertMultiSet(
+  rawContent: any,
+  courseCode: string = 'BCS303',
+  courseName: string = 'Data Structures & Applications',
+  semester: string = '3',
+  maxMarks: number = 100
+): MultiSetPaperContent {
+  if (isMultiSetContent(rawContent)) {
+    return {
+      setA: parseOrConvertPaperContent(rawContent.setA, courseCode, courseName, semester, maxMarks),
+      setB: parseOrConvertPaperContent(rawContent.setB, courseCode, courseName, semester, maxMarks),
+      activeSet: rawContent.activeSet || 'A',
+    };
+  }
+
+  // Legacy single set paper: parse as setA and clone blueprint for setB
+  const setA = parseOrConvertPaperContent(rawContent, courseCode, courseName, semester, maxMarks);
+  const setB = clonePaperBlueprint(setA, 'B');
+
+  return {
+    setA,
+    setB,
+    activeSet: 'A',
+  };
+}
+
