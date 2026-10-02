@@ -31,6 +31,7 @@ import {
 import { ModuleAccordion } from '@/components/paper-authoring/ModuleAccordion';
 import { RegulatoryDiagnosticsRadar } from '@/components/paper-authoring/RegulatoryDiagnosticsRadar';
 import { OfficialPaperPreview } from '@/components/paper-authoring/OfficialPaperPreview';
+import { ComplianceAuditorModal } from '@/components/paper-authoring/ComplianceAuditorModal';
 
 export default function CreatePaper() {
   const { currentUser } = useAuth();
@@ -41,6 +42,7 @@ export default function CreatePaper() {
   const assignmentIdParam = searchParams.get('id');
 
   const [saving, setSaving] = useState(false);
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'authoring' | 'preview'>('authoring');
   const [activeModuleFilter, setActiveModuleFilter] = useState<number | 'all'>('all');
 
@@ -199,6 +201,11 @@ export default function CreatePaper() {
     }
   };
 
+  const handleConfirmSubmit = async () => {
+    await handleSave(true);
+    setAuditModalOpen(false);
+  };
+
   if (!currentAssignment) {
     return (
       <div className="max-w-xl mx-auto my-12 p-8 bg-card border border-border rounded-2xl shadow-lg text-center space-y-6">
@@ -292,7 +299,7 @@ export default function CreatePaper() {
 
           <Button
             size="sm"
-            onClick={() => handleSave(true)}
+            onClick={() => setAuditModalOpen(true)}
             disabled={saving}
             className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
           >
@@ -414,7 +421,7 @@ export default function CreatePaper() {
 
               <Button
                 size="sm"
-                onClick={() => handleSave(true)}
+                onClick={() => setAuditModalOpen(true)}
                 disabled={saving}
                 className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
               >
@@ -425,6 +432,19 @@ export default function CreatePaper() {
           </div>
         </div>
       )}
+
+      {/* Pre-Submission Autonomous Compliance Auditor Modal */}
+      <ComplianceAuditorModal
+        isOpen={auditModalOpen}
+        onClose={() => setAuditModalOpen(false)}
+        paper={paper}
+        onConfirmSubmit={handleConfirmSubmit}
+        submitting={saving}
+        onJumpToModule={(modNum) => {
+          setActiveModuleFilter(modNum);
+          setActiveTab('authoring');
+        }}
+      />
     </div>
   );
 }
