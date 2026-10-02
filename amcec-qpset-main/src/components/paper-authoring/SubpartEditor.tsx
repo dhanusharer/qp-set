@@ -8,6 +8,8 @@ import { LatexMathModal } from './LatexMathModal';
 import { SchemeOfEvaluationDrawer } from './SchemeOfEvaluationDrawer';
 import { QuestionFramerDrawer } from './QuestionFramerDrawer';
 import { QuestionSubpart, BLOOMS_LABELS, CO_OPTIONS, RubricStep } from './types';
+import { apiClient } from '@/lib/apiClient';
+import { useToast } from '@/hooks/use-toast';
 import {
   Sigma,
   Image as ImageIcon,
@@ -20,6 +22,8 @@ import {
   Eye,
   EyeOff,
   Wand2,
+  Share2,
+  Loader2,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -31,6 +35,7 @@ interface SubpartEditorProps {
   moduleNumber?: number;
   courseCode?: string;
   courseName?: string;
+  courseId?: number;
 }
 
 export const SubpartEditor: React.FC<SubpartEditorProps> = ({
@@ -41,12 +46,20 @@ export const SubpartEditor: React.FC<SubpartEditorProps> = ({
   moduleNumber = 1,
   courseCode = '21CS32',
   courseName = 'Data Structures & Applications',
+  courseId,
 }) => {
+  const { toast } = useToast();
   const [mathModalOpen, setMathModalOpen] = useState(false);
   const [schemeDrawerOpen, setSchemeDrawerOpen] = useState(false);
   const [framerOpen, setFramerOpen] = useState(false);
   const [diagramModalOpen, setDiagramModalOpen] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+
+  // Push to Department Question Bank state
+  const [pushBankModalOpen, setPushBankModalOpen] = useState(false);
+  const [pushingToBank, setPushingToBank] = useState(false);
+  const [bankTopic, setBankTopic] = useState(`Module ${moduleNumber} Core Concepts`);
+  const [bankSubtopic, setBankSubtopic] = useState('');
 
   const bloomsConfig = BLOOMS_LABELS[subpart.bloomsLevel] || BLOOMS_LABELS.L3;
 
@@ -65,6 +78,63 @@ export const SubpartEditor: React.FC<SubpartEditorProps> = ({
 
   const handleSaveRubric = (rubric: RubricStep[], modelAnswer: string) => {
     onChange({ ...subpart, markingRubric: rubric, modelAnswer });
+  };
+
+  // Push question to Department Question Bank
+  const handlePushToBank = async () => {
+    if (!subpart.text || subpart.text.trim().length < 3) return;
+    setPushingToBank(true);
+    try {
+      const payload = {
+        courseId: courseId || 1,
+        unitNumber: moduleNumber,
+        topic: bankTopic.trim() || `Module ${moduleNumber} Core Concepts`,
+        subtopic: bankSubtopic.trim() || undefined,
+        plainText: subpart.text,
+        stemRichJson: {
+          text: subpart.text,
+          latexEquation: subpart.latexEquation,
+          svgDiagram: subpart.svgDiagram,
+          codeSnippet: subpart.codeSnippet,
+        },
+        parts: [
+          {
+            partLabel: subpart.partLabel,
+            marks: Number(subpart.marks) || 10,
+            bloomsLevel: subpart.bloomsLevel,
+            coCode: subpart.coMapping,
+            markingRubric: subpart.markingRubric,
+            modelAnswerJson: subpart.modelAnswer ? { answer: subpart.modelAnswer } : undefined,
+          },
+        ],
+        status: 'DRAFT',
+      };
+
+      const res: any = await apiClient.post('/bank/questions', payload);
+      const newQuestionId = res?.data?.questionId || res?.questionId;
+      const questionCode = res?.data?.code || res?.code;
+
+      onChange({
+        ...subpart,
+        bankQuestionId: newQuestionId,
+      });
+
+      toast({
+        title: 'Question Contributed to Bank! 🏦',
+        description: `Successfully added to Department Bank with Code: ${questionCode || `#${newQuestionId}`}`,
+      });
+
+      setPushBankModalOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: 'Contribution Failed',
+        description: err.message || 'Could not contribute question to department bank.',
+        variant: 'destructive',
+      });
+    } finally {
+      setPushingToBank(false);
+    }
   };
 
   return (
@@ -295,6 +365,26 @@ export const SubpartEditor: React.FC<SubpartEditorProps> = ({
             <Sparkles className="h-3.5 w-3.5" />
             AI Framer & PYQs
           </Button>
+
+          {/* Push Question to Department Bank */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPushBankModalOpen(true)}
+            disabled={!subpart.text || subpart.text.trim().length < 5}
+            className="h-7 text-[11px] gap-1 px-2.5 font-medium hover:border-primary hover:text-primary"
+            title="Contribute this authored question and scheme to the Department Question Bank"
+          >
+            <Share2 className="h-3.5 w-3.5 text-blue-500" />
+            {subpart.bankQuestionId ? (
+              <span className="text-emerald-600 flex items-center gap-1 font-semibold">
+                <CheckCircle2 className="h-3 w-3" /> Bank #{subpart.bankQuestionId}
+              </span>
+            ) : (
+              <span>Push to Bank</span>
+            )}
+          </Button>
         </div>
 
         {/* Scheme of Evaluation Drawer Trigger */}
@@ -372,6 +462,86 @@ export const SubpartEditor: React.FC<SubpartEditorProps> = ({
               onSave={handleSaveDiagram}
               onCancel={() => setDiagramModalOpen(false)}
             />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Push to Department Question Bank Dialog */}
+      <Dialog open={pushBankModalOpen} onOpenChange={setPushBankModalOpen}>
+        <DialogContent className="max-w-md p-6 space-y-4">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-lg font-bold flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-primary" />
+              Contribute to Department Question Bank
+            </DialogTitle>
+          </DialogHeader>
+
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Contribute this authored question, Bloom's categorization, and Scheme of Evaluation to the AMCEC Department Question Bank for faculty reuse and peer review.
+          </p>
+
+          <div className="space-y-3 text-xs">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground">Syllabus Topic / Unit:</label>
+              <Input
+                value={bankTopic}
+                onChange={(e) => setBankTopic(e.target.value)}
+                placeholder="e.g. Binary Search Trees & AVL Rotations"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground">Subtopic / Specialized Area (Optional):</label>
+              <Input
+                value={bankSubtopic}
+                onChange={(e) => setBankSubtopic(e.target.value)}
+                placeholder="e.g. Deletion and Tree Balancing"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            {/* Snapshot Metadata Pill */}
+            <div className="bg-muted/40 p-3 rounded-xl border space-y-1.5 text-[11px]">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Module:</span>
+                <span className="font-semibold">Module {moduleNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Marks & Bloom's:</span>
+                <span className="font-semibold">{subpart.marks}M • {subpart.bloomsLevel} ({bloomsConfig.name})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Outcome (CO):</span>
+                <span className="font-semibold">{subpart.coMapping}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Scheme of Evaluation:</span>
+                <span className="font-semibold">{subpart.markingRubric.length} Rubric Steps Defined</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPushBankModalOpen(false)}
+              className="h-8 text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handlePushToBank}
+              disabled={pushingToBank || !bankTopic.trim()}
+              className="h-8 text-xs gap-1.5 bg-primary text-primary-foreground font-semibold"
+            >
+              {pushingToBank ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+              Confirm Contribution
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -118,6 +118,7 @@ export const FullQuestionCard: React.FC<FullQuestionCardProps> = ({
             key={sp.id}
             subpart={sp}
             moduleNumber={moduleNumber}
+            courseId={courseId}
             onChange={(updated) => handleUpdateSubpart(idx, updated)}
             onDelete={() => handleDeleteSubpart(idx)}
             canDelete={question.subparts.length > 1}
