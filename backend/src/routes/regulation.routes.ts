@@ -92,7 +92,7 @@ regulationRouter.get(
   requireAuth,
   requireRole("controller", "hod", "qpsetter"),
   async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid regulation profile ID" });
     }
@@ -156,7 +156,7 @@ regulationRouter.put(
   requireAuth,
   requireRole("controller"),
   async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid profile ID" });
     }
